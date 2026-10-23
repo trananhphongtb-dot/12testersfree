@@ -5,6 +5,10 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+defaults:
+  run:
+    working-directory: tester12
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -53,6 +57,6 @@ jobs:
         with:
           name: tester12-free
           path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/bundle/release/*.aab
+            tester12/app/build/outputs/apk/debug/*.apk
+            tester12/app/build/outputs/apk/release/*.apk
+            tester12/app/build/outputs/bundle/release/*.aab
