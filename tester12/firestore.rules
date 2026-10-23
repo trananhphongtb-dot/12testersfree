@@ -1,0 +1,103 @@
+rules_version = '2';
+// Quy tắc bảo mật cho 12 Testers Free.
+// Dán toàn bộ vào Firebase Console > Firestore Database > Rules > Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function str(v, maxLen) { return v is string && v.size() <= maxLen; }
+
+    // ---------- hồ sơ người dùng ----------
+    match /users/{uid} {
+      allow read: if signedIn() && me() == uid;
+      allow create: if signedIn() && me() == uid
+        && request.resource.data.points == 0
+        && str(request.resource.data.name, 40);
+      // Điểm chỉ được đổi theo các mức trong app (+10, +2, +5, −30) và không âm.
+      allow update: if signedIn() && me() == uid
+        && changed().hasOnly(['name', 'testerEmail', 'points', 'lang'])
+        && str(request.resource.data.name, 40)
+        && request.resource.data.points >= 0
+        && (request.resource.data.points - resource.data.points) in [0, 10, 2, 5, -30];
+      allow delete: if signedIn() && me() == uid;
+
+      // các app mà người này đang test
+      match /joined/{appId} {
+        allow read, write: if signedIn() && me() == uid;
+      }
+    }
+
+    // ---------- app cần test ----------
+    match /apps/{appId} {
+      function isOwner() { return signedIn() && resource.data.ownerUid == me(); }
+      function testerPath() { return /databases/$(database)/documents/apps/$(appId)/testers/$(me()); }
+
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == me()
+        && request.resource.data.testersCount == 0
+        && str(request.resource.data.name, 50)
+        && str(request.resource.data.pkg, 150)
+        && str(request.resource.data.desc, 600)
+        && request.resource.data.bumpedAt == request.time;
+
+      allow update: if
+        // chủ app: sửa thông tin, ẩn/hiện, đẩy lên đầu (không được tự sửa số người test)
+        (isOwner()
+          && changed().hasOnly(['name', 'mode', 'groupLink', 'desc', 'active', 'bumpedAt', 'ownerName'])
+          && str(request.resource.data.name, 50)
+          && str(request.resource.data.desc, 600)
+          && (!('bumpedAt' in changed()) || request.resource.data.bumpedAt == request.time))
+        ||
+        // người khác: chỉ +1 khi tham gia, −1 khi rời (kèm tạo/xóa bản ghi người test)
+        (signedIn() && resource.data.ownerUid != me()
+          && changed().hasOnly(['testersCount'])
+          && ((request.resource.data.testersCount == resource.data.testersCount + 1
+                 && !exists(testerPath()) && existsAfter(testerPath()))
+              || (request.resource.data.testersCount == resource.data.testersCount - 1
+                 && exists(testerPath()) && !existsAfter(testerPath()))));
+
+      allow delete: if isOwner();
+
+      match /testers/{uid} {
+        function appOwner() { return get(/databases/$(database)/documents/apps/$(appId)).data.ownerUid; }
+        allow read: if signedIn() && (me() == uid || appOwner() == me());
+        allow create: if signedIn() && me() == uid && appOwner() != me()
+          && request.resource.data.days == 1;
+        allow update: if signedIn() && me() == uid
+          && changed().hasOnly(['days', 'lastDay', 'name', 'email', 'proof'])
+          && request.resource.data.days <= resource.data.days + 1;
+        allow delete: if signedIn() && (me() == uid || appOwner() == me());
+      }
+
+      // ảnh chụp màn hình xác nhận đã tham gia (nén nhỏ, lưu thẳng trong Firestore)
+      match /proofs/{uid} {
+        function appOwner3() { return get(/databases/$(database)/documents/apps/$(appId)).data.ownerUid; }
+        allow read: if signedIn() && (me() == uid || appOwner3() == me());
+        allow create, update: if signedIn() && me() == uid
+          && existsAfter(/databases/$(database)/documents/apps/$(appId)/testers/$(me()))
+          && request.resource.data.img is string
+          && request.resource.data.img.size() < 300000
+          && request.resource.data.img.matches('^data:image/jpeg;base64,.*');
+        allow delete: if signedIn() && (me() == uid || appOwner3() == me());
+      }
+
+      match /feedback/{fid} {
+        function appOwner2() { return get(/databases/$(database)/documents/apps/$(appId)).data.ownerUid; }
+        allow read: if signedIn() && (resource.data.uid == me() || appOwner2() == me());
+        allow create: if signedIn() && request.resource.data.uid == me()
+          && str(request.resource.data.text, 1000)
+          && exists(/databases/$(database)/documents/apps/$(appId)/testers/$(me()));
+        allow delete: if signedIn() && (resource.data.uid == me() || appOwner2() == me());
+      }
+    }
+
+    // ---------- báo cáo vi phạm (chỉ anh xem trong Firebase Console) ----------
+    match /reports/{id} {
+      allow create: if signedIn() && request.resource.data.by == me();
+    }
+  }
+}

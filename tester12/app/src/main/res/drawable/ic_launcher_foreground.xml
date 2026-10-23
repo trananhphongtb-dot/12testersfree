@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- two overlapping people heads = "test chéo" -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M42,40m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0"/>
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M27,70c0,-9 7,-15 15,-15s15,6 15,15z"/>
+    <path android:fillColor="#CCFBF1"
+        android:pathData="M64,44m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0"/>
+    <path android:fillColor="#CCFBF1"
+        android:pathData="M51,72c0,-8 6,-13 13,-13s13,5 13,13z"/>
+    <!-- amber check badge -->
+    <path android:fillColor="#F59E0B"
+        android:pathData="M72,66m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0"/>
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="3"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M67,66l3.5,3.5l6.5,-7"/>
+</vector>
