@@ -1,11 +1,13 @@
-/* 12 Testers Free — giao diện chính */
+/* 12 Testers Free — giao diện chính (bản 2: nền đen, 4 tab) */
 (function () {
   "use strict";
 
-  // ---------------------------------------------------------------- helpers
+  // ================================================================ helpers
   const $ = (s, el) => (el || document).querySelector(s);
+  const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
   const A = window.Android || null;
-  const P = window.POINTS;
+  const ST = window.STARS;
+  const CG = window.COMMUNITY_GROUP;
   const root = $("#root"), layer = $("#layer");
 
   function esc(s) {
@@ -15,39 +17,46 @@
   function fmt(str, vars) {
     return String(str).replace(/\{(\w+)\}/g, (_, k) => (vars && k in vars ? vars[k] : "{" + k + "}"));
   }
-  let LANG = "vi";
+  let LANG = "en";
   function t(k, vars) {
-    const d = I18N[LANG] || I18N.vi;
-    return fmt(d[k] != null ? d[k] : (I18N.vi[k] != null ? I18N.vi[k] : k), vars);
+    const d = I18N[LANG] || {};
+    const v = d[k] != null ? d[k] : (I18N.en[k] != null ? I18N.en[k] : k);
+    return fmt(v, vars);
   }
-  function todayStr() {
-    const d = new Date();
-    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-  }
+  const pad = n => String(n).padStart(2, "0");
+  function dstr(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function today() { return dstr(new Date()); }
+  function parseD(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
+  function addDays(s, n) { const d = parseD(s); d.setDate(d.getDate() + n); return dstr(d); }
+  function diffDays(a, b) { return Math.round((parseD(b) - parseD(a)) / 86400000); }
   function ms(ts) {
     if (!ts) return 0;
     if (typeof ts.toMillis === "function") return ts.toMillis();
     if (ts instanceof Date) return ts.getTime();
-    if (typeof ts === "number") return ts;
-    return 0;
+    return typeof ts === "number" ? ts : 0;
   }
   function ago(ts) {
     const m = ms(ts); if (!m) return "";
-    const n = Math.floor((Date.now() - m) / 86400000);
-    return n <= 0 ? t("today") : t("daysAgo", { n });
+    const s = Math.max(0, (Date.now() - m) / 1000);
+    if (s < 3600) return t("agoM", { n: Math.max(1, Math.floor(s / 60)) });
+    if (s < 86400) return t("agoH", { n: Math.floor(s / 3600) });
+    if (s < 86400 * 14) return t("agoD", { n: Math.floor(s / 86400) });
+    return t("agoW", { n: Math.floor(s / 604800) });
   }
-  const COLORS = ["#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#EA580C", "#059669", "#0891B2", "#4F46E5", "#B45309"];
-  function colorFor(s) {
-    let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-    return COLORS[h % COLORS.length];
+  function untilMidnight() {
+    const n = new Date(), e = new Date(n); e.setHours(24, 0, 0, 0);
+    const m = Math.floor((e - n) / 60000);
+    return Math.floor(m / 60) + "h " + pad(m % 60) + "m";
   }
-  function icon(name, pkg) {
-    const ch = (String(name).trim()[0] || "?").toUpperCase();
-    return `<div class="appicon" style="background:${colorFor(pkg || name)}">${esc(ch)}</div>`;
+  const COLORS = ["#2563EB", "#7C3AED", "#DB2777", "#EA580C", "#059669", "#0891B2", "#4F46E5", "#B45309"];
+  function colorFor(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; }
+  function iconHtml(a, cls) {
+    if (a && a.icon) return `<img class="ico ${cls || ""}" src="${esc(a.icon)}" alt="">`;
+    const ch = (String((a && a.name) || "?").trim()[0] || "?").toUpperCase();
+    return `<div class="ico ${cls || ""}" style="background:${colorFor((a && a.pkg) || ch)}">${esc(ch)}</div>`;
   }
   function toast(msg) {
-    const el = $("#toast");
-    el.textContent = msg; el.classList.remove("hidden");
+    const el = $("#toast"); el.textContent = msg; el.classList.remove("hidden");
     clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.add("hidden"), 2600);
   }
   function openUrl(u) { if (A) A.openUrl(u); else window.open(u, "_blank"); }
@@ -55,6 +64,11 @@
   const playUrl = pkg => "https://play.google.com/store/apps/details?id=" + pkg;
   const isGmail = e => /^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/i.test(String(e).trim());
   const isPkg = p => /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(p);
+  function pkgFrom(s) {
+    s = String(s || "").trim();
+    const m = s.match(/[?&]id=([a-zA-Z0-9_.]+)/) || s.match(/apps\/testing\/([a-zA-Z0-9_.]+)/);
+    return m ? m[1] : s;
+  }
   async function copyText(text) {
     try { await navigator.clipboard.writeText(text); return true; } catch (e) {
       const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta);
@@ -63,30 +77,42 @@
     }
   }
   function busy(btn, on) { if (btn) btn.disabled = !!on; }
+  const LS = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
 
-  // Chọn ảnh chụp màn hình rồi nén thành JPEG nhỏ (< ~250 KB) để lưu thẳng vào Firestore
-  // (Firebase Storage giờ cần gói trả phí nên không dùng).
-  function pickImage() {
+  // Chọn ảnh rồi nén JPEG (ảnh chụp màn hình) hoặc cắt vuông (icon)
+  function pickImage(opt) {
+    opt = opt || {};
     return new Promise(resolve => {
       const inp = document.createElement("input");
       inp.type = "file"; inp.accept = "image/*";
       inp.onchange = () => {
-        const f = inp.files && inp.files[0];
-        if (!f) return resolve(null);
+        const f = inp.files && inp.files[0]; if (!f) return resolve(null);
         const img = new Image();
         img.onload = () => {
-          let maxSide = 1280, q = 0.6, out = "";
-          for (let i = 0; i < 6; i++) {
-            const k = Math.min(1, maxSide / Math.max(img.width, img.height));
-            const c = document.createElement("canvas");
-            c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-            c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-            out = c.toDataURL("image/jpeg", q);
-            if (out.length < 250000) break;
-            maxSide = Math.round(maxSide * 0.8); q = Math.max(0.4, q - 0.05);
+          let out = "";
+          const limit = opt.limit || 110000;
+          if (opt.square) {
+            const side = Math.min(img.width, img.height), S = opt.square;
+            const c = document.createElement("canvas"); c.width = c.height = S;
+            c.getContext("2d").drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S);
+            out = c.toDataURL("image/jpeg", 0.85);
+          } else {
+            let maxSide = opt.max || 1000, q = 0.6;
+            for (let i = 0; i < 6; i++) {
+              const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+              const c = document.createElement("canvas");
+              c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+              c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+              out = c.toDataURL("image/jpeg", q);
+              if (out.length < limit) break;
+              maxSide = Math.round(maxSide * 0.8); q = Math.max(0.4, q - 0.05);
+            }
           }
           URL.revokeObjectURL(img.src);
-          resolve(out.length < 290000 ? out : null);
+          resolve(out.length < limit * 1.2 ? out : null);
         };
         img.onerror = () => resolve(null);
         img.src = URL.createObjectURL(f);
@@ -94,17 +120,8 @@
       inp.click();
     });
   }
-  function proofPicker(el, onPick) {
-    const box = $(".proofbox", el);
-    $(".proofbtn", el).onclick = async () => {
-      const data = await pickImage();
-      if (!data) { toast(t("proofBad")); return; }
-      box.innerHTML = `<img class="proofimg" src="${data}" alt="">`;
-      onPick(data);
-    };
-  }
 
-  // ---------------------------------------------------------------- overlays
+  // ================================================================ overlays
   const stack = [];
   function sheet(html, onMount) {
     const ov = document.createElement("div");
@@ -115,13 +132,22 @@
     if (onMount) onMount(ov.firstElementChild);
     return ov;
   }
+  function page(title, html, onMount) {
+    const pg = document.createElement("div");
+    pg.className = "page";
+    pg.innerHTML = `<div class="bar-top"><button class="back" data-back>${IC.back}</button><h2>${esc(title)}</h2></div><div class="inner">${html}</div>`;
+    $("[data-back]", pg).onclick = closeTop;
+    layer.appendChild(pg); stack.push(pg);
+    if (onMount) onMount(pg);
+    return pg;
+  }
   function closeTop() { const ov = stack.pop(); if (ov) ov.remove(); }
   function closeAll() { while (stack.length) closeTop(); }
   function ask(message, okLabel, danger) {
     return new Promise(res => {
       sheet(`<p style="font-size:16px;margin:8px 0 4px">${esc(message)}</p>
         <div class="btns"><button class="btn ghost" data-a="no">${esc(t("cancel"))}</button>
-        <button class="btn ${danger ? "danger" : ""}" data-a="yes">${esc(okLabel || t("confirm"))}</button></div>`,
+        <button class="btn ${danger ? "red" : ""}" data-a="yes">${esc(okLabel || t("confirm"))}</button></div>`,
         el => el.addEventListener("click", e => {
           const a = e.target.closest("[data-a]"); if (!a) return;
           closeTop(); res(a.dataset.a === "yes");
@@ -130,57 +156,116 @@
   }
   window.onAndroidBack = function () {
     if (stack.length) { closeTop(); return true; }
-    if (S.user && S.tab !== "explore") { go("explore"); return true; }
+    if (S.user && S.tab !== "home") { go("home"); return true; }
     return false;
   };
-  window.onAndroidResume = function () {
-    if (S.user && S.tab === "testing") renderTab();
-  };
+  window.onAndroidResume = function () { if (S.user && S.me && !stack.length && (S.tab === "tasks" || S.tab === "home")) renderTab(); };
 
-  // ---------------------------------------------------------------- state
-  const S = {
-    user: null,       // firebase user
-    me: null,         // users/{uid} data
-    tab: "explore",
-    filter: "need",
-    apps: null,       // explore list
-    joined: null,     // map appId -> joined doc
-    mine: null,       // my apps
+  // ================================================================ icons
+  const IC = {
+    back: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>',
+    search: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" stroke-linecap="round"/></svg>',
+    check: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 10"/></svg>',
+    info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01" stroke-linecap="round"/></svg>',
+    flag: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 21V4h11l-1.5 4L16 12H5"/></svg>',
+    share: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 002 2h10a2 2 0 002-2v-5"/></svg>',
+    copy: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg>',
+    cam: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+    img: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4" width="15" height="15" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M3 16l4-4 5 5M19 2v6M16 5h6"/></svg>',
+    ext: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg>',
+    help: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.9.6-1.5 1.1-1.5 2.2M12 17h.01"/></svg>',
+    chev: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>',
+    edit: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+    star: '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 6.2 6.6.7-5 4.5 1.4 6.6L12 17.2l-5.9 3.3 1.4-6.6-5-4.5 6.6-.7z"/></svg>',
+    home: '<path d="M4 11l8-7 8 7v9H4z M10 20v-5h4v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+    market: '<path d="M4 9l1.5-5h13L20 9M4 9h16v11H4zM4 9c0 2 3.5 2 4 0 .5 2 3.5 2 4 0 .5 2 3.5 2 4 0 .5 2 4 2 4 0M10 20v-5h4v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+    flask: '<path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3M7 15h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+    user: '<circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
   };
+  const starTxt = n => `<span class="star">${IC.star}</span><b>${n || 0}</b>`;
+
+  // Hình minh họa Play Console (vẽ dạng màn hình điện thoại)
+  function phoneSvg() {
+    return `<svg class="phone" viewBox="0 0 230 400" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,Roboto,sans-serif">
+      <rect x="2" y="2" width="226" height="396" rx="28" fill="#1C1C1E" stroke="#3A3A3C" stroke-width="3"/>
+      <rect x="12" y="14" width="206" height="372" rx="20" fill="#fff"/>
+      <rect x="92" y="20" width="46" height="7" rx="3.5" fill="#1C1C1E"/>
+      <rect x="12" y="36" width="206" height="38" fill="#F1F3F4"/>
+      <path d="M26 55l6-6M26 55l6 6M26 55h12" stroke="#5F6368" stroke-width="2" stroke-linecap="round"/>
+      <text x="48" y="59" font-size="12" font-weight="700" fill="#202124">${esc(t("phTrack"))}</text>
+      <text x="26" y="95" font-size="10.5" fill="#5F6368">${esc(t("phTabTrack"))}</text>
+      <text x="118" y="95" font-size="10.5" font-weight="700" fill="#1A73E8">${esc(t("phTabTesters"))}</text>
+      <rect x="112" y="100" width="70" height="2.5" rx="1" fill="#1A73E8"/>
+      <line x1="12" y1="103" x2="218" y2="103" stroke="#E0E0E0"/>
+      <circle cx="30" cy="126" r="6" fill="none" stroke="#9AA0A6" stroke-width="1.6"/>
+      <text x="44" y="130" font-size="11" fill="#3C4043">${esc(t("phEmails"))}</text>
+      <circle cx="30" cy="152" r="6" fill="none" stroke="#1A73E8" stroke-width="1.6"/><circle cx="30" cy="152" r="3" fill="#1A73E8"/>
+      <text x="44" y="156" font-size="11" font-weight="700" fill="#202124">Google Groups</text>
+      <rect x="22" y="170" width="186" height="64" rx="6" fill="none" stroke="#EF4444" stroke-width="2.5"/>
+      <text x="32" y="188" font-size="9" fill="#5F6368">${esc(t("phEmailAddr"))}</text>
+      <rect x="30" y="194" width="170" height="28" rx="4" fill="#F8F9FA" stroke="#DADCE0"/>
+      <text x="35" y="212" font-size="8.9" font-weight="700" fill="#202124">${esc(CG.email)}</text>
+      <path d="M196 262 L172 238" stroke="#EF4444" stroke-width="3" stroke-linecap="round"/>
+      <path d="M170 248 L170 236 L182 236" fill="none" stroke="#EF4444" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="26" y="262" font-size="9.5" fill="#5F6368">${esc(t("phPaste"))}</text>
+      <rect x="140" y="330" width="64" height="30" rx="15" fill="#1A73E8"/>
+      <text x="172" y="349" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">${esc(t("phSave"))}</text>
+    </svg>`;
+  }
+
+  // ================================================================ state
+  const S = { user: null, me: null, tab: "home", apps: null, appsAt: 0, joined: null, mine: null, mineT: {},
+    tdocs: {}, open: null, openTask: null, openMine: null, q: "" };
   let auth, db, FV;
-  let pendingName = "";
+  let pendingName = "", skipOnboard = false;
 
-  // ---------------------------------------------------------------- boot
-  function boot() {
-    const pref = (() => { try { return localStorage.getItem("lang"); } catch (e) { return null; } })();
-    const dev = A && A.deviceLang ? A.deviceLang() : (navigator.language || "vi");
-    LANG = pref || (String(dev).toLowerCase().startsWith("vi") ? "vi" : "en");
-    document.documentElement.lang = LANG;
+  // ================================================================ language
+  const SUPPORTED = ["vi", "en", "hi", "id", "pt", "es", "fr", "de", "ru", "tr", "ar", "bn", "ur", "th", "ms", "fil", "zh", "ja", "ko", "it"];
+  function deviceLang() {
+    let d = String(A && A.deviceLang ? A.deviceLang() : (navigator.language || "en")).toLowerCase();
+    d = d.split(/[-_]/)[0];
+    if (d === "tl") d = "fil"; if (d === "in") d = "id";
+    return SUPPORTED.includes(d) ? d : "en";
+  }
+  function langPref() { return LS.get("langPref", "auto"); }
+  function resolveLang() { return langPref() === "en" ? "en" : deviceLang(); }
+  function loadLang(l) {
+    return new Promise(res => {
+      if (I18N[l]) return res();
+      const s = document.createElement("script");
+      s.src = "lang/" + l + ".js"; s.onload = res; s.onerror = res;
+      document.head.appendChild(s);
+    });
+  }
+  async function applyLang() {
+    let l = resolveLang();
+    await loadLang(l);
+    if (!I18N[l]) l = "en";
+    LANG = l;
+    document.documentElement.lang = l;
+    document.documentElement.dir = (l === "ar" || l === "ur") ? "rtl" : "ltr";
+  }
 
+  // ================================================================ boot
+  async function boot() {
+    await applyLang();
     if (typeof firebase === "undefined") {
       root.innerHTML = `<div class="empty"><div class="big">📶</div><p>${esc(t("errNet"))}</p>
         <button class="btn" onclick="location.reload()">${esc(t("retry"))}</button></div>`;
       return;
     }
-    if (!window.FIREBASE_CONFIG || /DAN_API_KEY/.test(FIREBASE_CONFIG.apiKey)) {
-      root.innerHTML = `<div class="empty"><div class="big">⚙️</div><p>${esc(t("missingConfig"))}</p></div>`;
-      return;
-    }
     firebase.initializeApp(FIREBASE_CONFIG);
-    auth = firebase.auth();
-    db = firebase.firestore();
+    auth = firebase.auth(); db = firebase.firestore();
     try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) {}
     FV = firebase.firestore.FieldValue;
-
     auth.onAuthStateChanged(async u => {
       closeAll();
-      S.user = u; S.me = null; S.apps = null; S.joined = null; S.mine = null; S.tab = "explore";
+      Object.assign(S, { user: u, me: null, apps: null, joined: null, mine: null, mineT: {}, tdocs: {}, tab: "home", open: null, openTask: null, openMine: null, q: "" });
+      skipOnboard = false;
       if (!u) { renderAuth("login"); return; }
       root.innerHTML = `<div class="spinner"></div>`;
-      try {
-        await loadMe();
-        renderShell();
-      } catch (e) {
+      try { await loadMe(); await Promise.all([loadMine(), loadJoined()]); setupNotify(); renderShell(); }
+      catch (e) {
         console.error(e);
         root.innerHTML = `<div class="empty"><div class="big">⚠️</div><p>${esc(t("errNet"))}</p>
           <button class="btn" id="rt">${esc(t("retry"))}</button></div>`;
@@ -188,54 +273,69 @@
       }
     });
   }
+  const userRef = () => db.collection("users").doc(S.user.uid);
+  const appRef = id => db.collection("apps").doc(id);
+  const testerRef = (appId, uid) => appRef(appId).collection("testers").doc(uid);
 
   async function loadMe() {
-    const ref = db.collection("users").doc(S.user.uid);
-    const snap = await ref.get();
+    const snap = await userRef().get();
     if (!snap.exists) {
       const data = {
-        name: pendingName || S.user.displayName || (S.user.email || "").split("@")[0],
+        name: (pendingName || S.user.displayName || (S.user.email || "").split("@")[0]).slice(0, 40),
         testerEmail: isGmail(S.user.email || "") ? S.user.email.toLowerCase() : "",
-        points: 0, lang: LANG,
-        createdAt: FV.serverTimestamp()
+        stars: 0, lang: LANG, createdAt: FV.serverTimestamp()
       };
-      await ref.set(data);
-      S.me = Object.assign({}, data, { points: 0 });
+      await userRef().set(data);
+      S.me = Object.assign({}, data, { stars: 0 });
       pendingName = "";
     } else {
       S.me = snap.data();
+      if (S.me.stars == null) S.me.stars = 0;
     }
   }
-  function addPoints(n) {
-    S.me.points = (S.me.points || 0) + n;
-    const el = $("#pts"); if (el) el.innerHTML = `<b>${S.me.points}</b> ${esc(t("points"))}`;
+
+  // Cộng sao: cập nhật hồ sơ + đồng bộ số sao hiển thị trên các app của mình
+  async function addStarsTo(b, delta) {
+    try { const f = await userRef().get(); if (f.exists) S.me.stars = f.data().stars || 0; } catch (e) {}
+    const ns = (S.me.stars || 0) + delta;
+    b.update(userRef(), { stars: FV.increment(delta) });
+    (S.mine || []).forEach(a => b.update(appRef(a.id), { ownerStars: ns }));
+    return ns;
+  }
+  function gotStars(ns) {
+    if (ns == null) return;
+    S.me.stars = ns; (S.mine || []).forEach(a => a.ownerStars = ns);
+    $$(".mystars").forEach(el => el.innerHTML = starTxt(ns));
   }
 
-  // ---------------------------------------------------------------- auth screen
+  // ================================================================ auth screen
+  function logoHtml() { return `<div class="logo"><b>12</b><small>TESTERS FREE</small></div>`; }
+  function googleReady() {
+    return !!(A && A.googleSignIn && window.GOOGLE_WEB_CLIENT_ID && /\.apps\.googleusercontent\.com$/.test(GOOGLE_WEB_CLIENT_ID));
+  }
+  function signOut() { if (A && A.googleSignOut) A.googleSignOut(); if (A && A.setNotify) A.setNotify(""); return auth.signOut(); }
+
   function renderAuth(mode) {
     const reg = mode === "register";
     root.innerHTML = `
       <div class="auth">
-        <div class="logo"><svg width="44" height="44" viewBox="0 0 108 108"><circle cx="42" cy="40" r="9" fill="#fff"/><path d="M27 70c0-9 7-15 15-15s15 6 15 15z" fill="#fff"/><circle cx="64" cy="44" r="8" fill="#CCFBF1"/><path d="M51 72c0-8 6-13 13-13s13 5 13 13z" fill="#CCFBF1"/><circle cx="72" cy="66" r="10" fill="#F59E0B"/><path d="M67 66l3.5 3.5 6.5-7" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <h1>${esc(t("appName"))}<span class="free">FREE</span></h1>
-        <p class="tag">${esc(t("tagline"))}</p>
+        ${logoHtml()}
+        <h1>12 Testers Free</h1>
+        <p class="tag2">${esc(t("tagline"))}</p>
         ${googleReady() ? `<button class="btn block gbtn" id="agoogle">
           <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
           ${esc(t("googleLogin"))}</button>
         <div class="or"><span>${esc(t("orEmail"))}</span></div>` : ""}
         <div class="card">
-          ${reg ? `<label>${esc(t("name"))}</label><input id="aname" type="text" maxlength="40" autocomplete="nickname">` : ""}
-          <label>${esc(t("email"))}</label><input id="aemail" type="email" autocomplete="email" placeholder="ban@gmail.com">
-          <label>${esc(t("password"))}</label><input id="apass" type="password" autocomplete="${reg ? "new-password" : "current-password"}">
+          ${reg ? `<label class="l" style="margin-top:0">${esc(t("name"))}</label><input id="aname" type="text" maxlength="40">` : ""}
+          <label class="l" ${reg ? "" : 'style="margin-top:0"'}>${esc(t("email"))}</label><input id="aemail" type="email" autocomplete="email" placeholder="you@gmail.com">
+          <label class="l">${esc(t("password"))}</label><input id="apass" type="password" autocomplete="${reg ? "new-password" : "current-password"}">
           <div class="err" id="aerr"></div>
           <button class="btn block" id="ago">${esc(reg ? t("register") : t("login"))}</button>
           <div class="row" style="justify-content:space-between;margin-top:6px">
             <button class="link" id="aswitch">${esc(reg ? t("haveAcc") : t("noAcc"))}</button>
             ${reg ? "" : `<button class="link muted" id="aforgot">${esc(t("forgot"))}</button>`}
           </div>
-        </div>
-        <div class="row" style="justify-content:center">
-          <button class="link muted" id="alang">${LANG === "vi" ? "English" : "Tiếng Việt"}</button>
         </div>
       </div>`;
     const err = $("#aerr");
@@ -250,13 +350,9 @@
           err.textContent = String(e && e.code).includes("account-exists") ? t("errGoogleExists") : t("errGoogle");
         }
       };
-      window.onGoogleError = msg => {
-        busy(gb, false);
-        if (msg !== "cancel") { console.error(msg); err.textContent = t("errGoogle"); }
-      };
+      window.onGoogleError = msg => { busy(gb, false); if (msg !== "cancel") { console.error(msg); err.textContent = t("errGoogle"); } };
       A.googleSignIn(GOOGLE_WEB_CLIENT_ID);
     };
-    $("#alang").onclick = () => { setLang(LANG === "vi" ? "en" : "vi"); renderAuth(mode); };
     if (!reg) $("#aforgot").onclick = async () => {
       const em = $("#aemail").value.trim();
       if (!/^\S+@\S+\.\S+$/.test(em)) { err.textContent = t("errEmail"); return; }
@@ -271,87 +367,108 @@
       if (pw.length < 6) { err.textContent = t("errPass"); return; }
       err.textContent = ""; busy(ev.target, true);
       try {
-        if (reg) {
-          pendingName = nm; // loadMe() dùng tên này khi tạo hồ sơ
-          await auth.createUserWithEmailAndPassword(em, pw);
-        } else {
-          await auth.signInWithEmailAndPassword(em, pw);
-        }
+        if (reg) { pendingName = nm; await auth.createUserWithEmailAndPassword(em, pw); }
+        else await auth.signInWithEmailAndPassword(em, pw);
       } catch (e) {
         const c = (e && e.code) || "";
         err.textContent = c.includes("email-already") ? t("errExists")
           : (c.includes("wrong-password") || c.includes("user-not-found") || c.includes("invalid-credential") || c.includes("invalid-login")) ? t("errLogin")
-          : c.includes("invalid-email") ? t("errEmail")
-          : c.includes("weak-password") ? t("errPass") : t("errNet");
+          : c.includes("invalid-email") ? t("errEmail") : c.includes("weak-password") ? t("errPass") : t("errNet");
         busy(ev.target, false);
       }
     };
   }
 
-  function googleReady() {
-    return !!(A && A.googleSignIn && window.GOOGLE_WEB_CLIENT_ID && /\.apps\.googleusercontent\.com$/.test(GOOGLE_WEB_CLIENT_ID));
+  // ================================================================ onboarding (nhóm chung)
+  const onboarded = () => LS.get("onboard_" + S.user.uid, false);
+  const setOnboarded = () => LS.set("onboard_" + S.user.uid, true);
+  function copyRowHtml() {
+    return `<div class="copyrow" data-copy><div class="grow"><small>${esc(t("tapCopy"))}</small><b>${esc(CG.email)}</b></div><div class="cbtn">${IC.copy}</div></div>`;
   }
-  function signOut() {
-    if (A && A.googleSignOut) A.googleSignOut();
-    return auth.signOut();
+  function bindCopy(el) {
+    $$("[data-copy]", el).forEach(b => b.onclick = async () => toast((await copyText(CG.email)) ? t("copiedGroup") : CG.email));
+  }
+  function onboardHtml(inSheet) {
+    return `
+      ${inSheet ? `<h2>${esc(t("obTitle"))}</h2>` : `${logoHtml()}<h1 style="text-align:center;font-size:23px;margin:0 0 6px">${esc(t("obTitle"))}</h1>`}
+      <p class="sub" style="${inSheet ? "" : "text-align:center;"}margin:0 0 16px">${esc(t("obIntro"))}</p>
+      <div class="card">
+        <div class="row" style="align-items:flex-start"><div class="num">1</div>
+          <div class="grow"><div class="title" style="font-size:16px">${esc(t("ob1Title"))}</div>
+          <div class="sub">${esc(t("ob1Body", { email: S.me.testerEmail || S.user.email || "" }))}</div></div></div>
+        <button class="btn block" data-ob="join" style="margin-top:12px">${esc(t("ob1Btn"))}</button>
+      </div>
+      <div class="card">
+        <div class="row" style="align-items:flex-start"><div class="num">2</div>
+          <div class="grow"><div class="title" style="font-size:16px">${esc(t("ob2Title"))}</div>
+          <div class="sub">${esc(t("ob2Body"))}</div></div></div>
+        ${copyRowHtml()}
+        <div class="hint">${esc(t("ob2Skip"))}</div>
+      </div>
+      ${inSheet ? `<button class="btn block ghost" data-ob="close">${esc(t("close"))}</button>` : `
+      <button class="btn block" data-ob="done">${esc(t("obDone"))}</button>
+      <div class="row" style="justify-content:center"><button class="link muted" data-ob="later">${esc(t("obLater"))}</button></div>`}`;
+  }
+  function bindOnboard(el) {
+    bindCopy(el);
+    $$("[data-ob]", el).forEach(b => b.onclick = () => {
+      const k = b.dataset.ob;
+      if (k === "join") openUrl(CG.link);
+      else if (k === "close") closeTop();
+      else if (k === "done") { setOnboarded(); renderShell(); }
+      else if (k === "later") { skipOnboard = true; renderShell(); }
+    });
   }
 
-  function setLang(l) {
-    LANG = l; document.documentElement.lang = l;
-    try { localStorage.setItem("lang", l); } catch (e) {}
-  }
-
-  // ---------------------------------------------------------------- shell
-  const TABS = [
-    ["explore", "tabExplore", '<path d="M12 2a10 10 0 100 20 10 10 0 000-20zm3.5 6.5l-2 5-5 2 2-5 5-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'],
-    ["testing", "tabTesting", '<path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'],
-    ["mine", "tabMine", '<rect x="4" y="3" width="16" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 17h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'],
-    ["me", "tabMe", '<circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>']
-  ];
+  // ================================================================ shell
+  const TABS = [["home", "tabHome", IC.home], ["explore", "tabExplore", IC.market], ["tasks", "tabTasks", IC.flask], ["me", "tabMe", IC.user]];
   function renderShell() {
-    root.innerHTML = `
-      <header class="top"><h1 id="ttl"></h1><span class="pts" id="pts"><b>${S.me.points || 0}</b> ${esc(t("points"))}</span></header>
-      <main id="main"></main>
+    if (!onboarded() && !skipOnboard) {
+      root.innerHTML = `<div class="auth" style="justify-content:flex-start;padding-top:28px">${onboardHtml(false)}</div>`;
+      bindOnboard(root); return;
+    }
+    root.innerHTML = `<main id="main"></main>
       <nav class="tabs">${TABS.map(([id, k, svg]) =>
-        `<button data-tab="${id}"><svg viewBox="0 0 24 24">${svg}</svg>${esc(t(k))}</button>`).join("")}</nav>`;
-    root.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => go(b.dataset.tab));
+        `<button data-tab="${id}"><svg viewBox="0 0 24 24">${svg}</svg>${esc(t(k))}${id === "tasks" ? '<i class="dot hidden" id="taskdot"></i>' : ""}</button>`).join("")}</nav>`;
+    $$("nav.tabs button").forEach(b => b.onclick = () => go(b.dataset.tab));
     go(S.tab);
   }
-  function go(tab) {
+  function go(tab, opts) {
     S.tab = tab;
-    root.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
-    const k = { explore: "tabExplore", testing: "tabTesting", mine: "tabMine", me: "tabMe" }[tab];
-    $("#ttl").textContent = tab === "explore" ? t("appName") : t(k);
+    $$("nav.tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
     window.scrollTo(0, 0);
-    renderTab();
+    renderTab(opts);
   }
-  function renderTab() {
+  function renderTab(opts) {
     const m = $("#main"); if (!m) return;
-    if (S.tab === "explore") return renderExplore(m);
-    if (S.tab === "testing") return renderTesting(m);
-    if (S.tab === "mine") return renderMine(m);
+    if (S.tab === "home") return renderHome(m);
+    if (S.tab === "explore") return renderExplore(m, opts);
+    if (S.tab === "tasks") return renderTasks(m);
     return renderMe(m);
   }
   function spin(m) { m.innerHTML = `<div class="spinner"></div>`; }
   function failBox(m, fn) {
-    m.innerHTML = `<div class="empty"><div class="big">⚠️</div><p>${esc(t("errNet"))}</p>
-      <button class="btn" id="rt">${esc(t("retry"))}</button></div>`;
+    m.innerHTML = `<div class="empty"><div class="big">⚠️</div><p>${esc(t("errNet"))}</p><button class="btn" id="rt">${esc(t("retry"))}</button></div>`;
     $("#rt").onclick = fn;
   }
+  function header(title, subtitle, right) {
+    return `<div class="ph"><div class="grow"><h1>${esc(title)}</h1>${subtitle ? `<p>${esc(subtitle)}</p>` : ""}</div>${right || ""}</div>`;
+  }
 
-  // ---------------------------------------------------------------- data loaders
+  // ================================================================ data
+  async function loadApps(force) {
+    if (!force && S.apps && Date.now() - S.appsAt < 120000) return S.apps;
+    const q = await db.collection("apps").orderBy("createdAt", "desc").limit(100).get();
+    const list = []; q.forEach(d => list.push(Object.assign({ id: d.id }, d.data())));
+    S.apps = list; S.appsAt = Date.now();
+    if (A && A.markSeen) A.markSeen(String(Date.now()));
+    return list;
+  }
   async function loadJoined(force) {
     if (S.joined && !force) return S.joined;
-    const q = await db.collection("users").doc(S.user.uid).collection("joined").get();
+    const q = await userRef().collection("joined").get();
     const map = {}; q.forEach(d => { map[d.id] = Object.assign({ id: d.id }, d.data()); });
     S.joined = map; return map;
-  }
-  // Giữ danh sách 2 phút để tiết kiệm lượt đọc (gói Firebase miễn phí: 50.000 lượt/ngày)
-  async function loadApps() {
-    if (S.apps && Date.now() - (S.appsAt || 0) < 120000) return S.apps;
-    const q = await db.collection("apps").orderBy("bumpedAt", "desc").limit(60).get();
-    const list = []; q.forEach(d => list.push(Object.assign({ id: d.id }, d.data())));
-    S.apps = list; S.appsAt = Date.now(); return list;
   }
   async function loadMine(force) {
     if (S.mine && !force) return S.mine;
@@ -360,584 +477,823 @@
     list.sort((a, b) => ms(b.createdAt) - ms(a.createdAt));
     S.mine = list; return list;
   }
-
-  // ---------------------------------------------------------------- explore
-  async function renderExplore(m) {
-    spin(m);
-    try { await Promise.all([loadApps(), loadJoined()]); }
-    catch (e) { console.error(e); return failBox(m, () => renderExplore(m)); }
-    if (S.tab !== "explore") return;
-    const now = Date.now();
-    let list = S.apps.filter(a => a.active !== false);
-    if (S.filter === "need") list = list.filter(a => (a.testersCount || 0) < 12);
-    if (S.filter === "notjoined") list = list.filter(a => !S.joined[a.id] && a.ownerUid !== S.user.uid);
-    m.innerHTML = `
-      <p class="sub" style="margin:2px 2px 12px;white-space:normal">${esc(t("exploreHint"))}</p>
-      <div class="seg">
-        <button data-f="need">${esc(t("filterNeed"))}</button>
-        <button data-f="notjoined">${esc(t("filterNotJoined"))}</button>
-        <button data-f="all">${esc(t("filterAll"))}</button>
-      </div>
-      <div id="list">${list.length ? list.map(a => appCard(a, now)).join("") :
-        `<div class="empty"><div class="big">🚀</div><p>${esc(t("noApps"))}</p>
-         <button class="btn" id="post1">${esc(t("addApp"))}</button></div>`}</div>`;
-    m.querySelectorAll("[data-f]").forEach(b => {
-      b.classList.toggle("on", b.dataset.f === S.filter);
-      b.onclick = () => { S.filter = b.dataset.f; renderExplore(m); };
-    });
-    const p1 = $("#post1"); if (p1) p1.onclick = () => editApp(null);
-    m.querySelectorAll("[data-app]").forEach(el => el.onclick = () => {
-      const a = S.apps.find(x => x.id === el.dataset.app); if (a) openJoin(a);
-    });
+  async function loadMineTesters() {
+    S.mineT = {};
+    await Promise.all((S.mine || []).map(async a => {
+      const q = await appRef(a.id).collection("testers").get();
+      const arr = []; q.forEach(d => arr.push(d.data()));
+      arr.sort((x, y) => ms(x.joinedAt) - ms(y.joinedAt));
+      S.mineT[a.id] = arr;
+    }));
   }
-  function appCard(a, now) {
-    const n = a.testersCount || 0, pct = Math.min(100, Math.round(n / 12 * 100));
-    const mine = a.ownerUid === S.user.uid, joined = !!S.joined[a.id];
-    const boosted = ms(a.bumpedAt) - ms(a.createdAt) > 60000 && now - ms(a.bumpedAt) < 3 * 86400000;
-    const isNew = now - ms(a.createdAt) < 2 * 86400000;
-    return `<div class="card" data-app="${esc(a.id)}">
-      <div class="row">${icon(a.name, a.pkg)}
-        <div class="grow"><div class="title">${esc(a.name)}</div>
-        <div class="sub">${esc(t("by"))} ${esc(mine ? t("you") : a.ownerName)} · ${esc(a.pkg)}</div></div>
-        ${mine ? "" : joined ? `<span class="chip ok">✓ ${esc(t("joined"))}</span>` : `<button class="btn small">${esc(t("join"))}</button>`}
-      </div>
-      ${a.desc ? `<p class="desc">${esc(a.desc.length > 160 ? a.desc.slice(0, 160) + "…" : a.desc)}</p>` : ""}
-      <div class="bar ${n >= 12 ? "" : "amber"}"><i style="width:${pct}%"></i></div>
-      <div class="barlabel"><span>${n}/12 ${esc(t("testers"))}</span>
-        <span>${n >= 12 ? esc(t("enough")) : esc(t("needMore", { n: 12 - n }))}</span></div>
-      ${(boosted || isNew) ? `<div class="chips">${boosted ? `<span class="chip hot">⚡ ${esc(t("boosted"))}</span>` : ""}${isNew ? `<span class="chip">${esc(t("newApp"))}</span>` : ""}</div>` : ""}
+  // trạng thái từng ngày của 1 người test (a: duyệt, r: từ chối, p: chờ duyệt, m: bỏ lỡ)
+  function dayInfo(td) {
+    td = td || {};
+    const join = td.joinDay || today(), now = today();
+    const sub = td.sub || {}, rev = td.rev || {};
+    const cur = diffDays(join, now) + 1;
+    const cells = [];
+    let done = 0, ok = 0;
+    for (let i = 0; i < 14; i++) {
+      const d = addDays(join, i);
+      let s = "";
+      if (rev[d] === "a") s = "a"; else if (rev[d] === "r") s = "r"; else if (sub[d]) s = "p";
+      else if (d < now) s = "m";
+      if (sub[d]) done++;
+      if (rev[d] === "a") ok++;
+      cells.push({ d, s, today: d === now });
+    }
+    const pending = Object.keys(sub).filter(d => !rev[d]).sort();
+    return { cur, cells, done, ok, pending, finished: cur > 14, todayDone: !!sub[now] };
+  }
+  const daysStrip = info => `<div class="days">${info.cells.map(c => `<i class="${c.s} ${c.today ? "t" : ""}"></i>`).join("")}</div>`;
+  const legend = () => `<div class="legend"><span class="a">${esc(t("stA"))}</span><span class="p">${esc(t("stP"))}</span><span class="r">${esc(t("stR"))}</span><span class="m">${esc(t("stM"))}</span></div>`;
+
+  // ================================================================ TAB 1: Trang chủ (app của tôi)
+  async function renderHome(m) {
+    if (!S.mine) spin(m);
+    try { await Promise.all([loadMine(true), loadApps(), loadJoined()]); await loadMineTesters(); } catch (e) { console.error(e); return failBox(m, () => renderHome(m)); }
+    if (S.tab !== "home") return;
+    const right = `<span class="starpill mystars">${starTxt(S.me.stars)}</span>`;
+    if (!S.mine.length) {
+      m.innerHTML = header(t("homeTitle"), t("homeSub"), right) + `
+        <div class="card" style="text-align:center;padding:30px 18px">
+          <div style="font-size:46px">🚀</div>
+          <div class="title" style="margin:6px 0 4px">${esc(t("noAppTitle"))}</div>
+          <p class="sub" style="margin:0 0 18px">${esc(t("noAppBody"))}</p>
+          <button class="btn block" id="addbig" style="font-size:17px;padding:16px">＋ ${esc(t("addApp"))}</button>
+        </div>`;
+      $("#addbig").onclick = () => addAppPage(null);
+      return;
+    }
+    m.innerHTML = header(t("homeTitle"), t("homeSub"), right) +
+      `<button class="btn block" id="addapp" style="margin-bottom:14px">＋ ${esc(t("addApp"))}</button>` +
+      S.mine.map(a => mineCard(a)).join("");
+    $("#addapp").onclick = () => addAppPage(null);
+    $$("[data-mine]", m).forEach(el => el.addEventListener("click", e => {
+      if (e.target.closest("[data-stop]")) return;
+      const id = el.dataset.mine;
+      S.openMine = S.openMine === id ? null : id;
+      renderHome(m);
+    }));
+    if (S.openMine) {
+      const el = $(`[data-mine="${S.openMine}"]`, m);
+      const a = S.mine.find(x => x.id === S.openMine);
+      if (el && a) bindMineExpanded(el, a);
+    }
+  }
+  function mineCard(a) {
+    const ts = S.mineT[a.id] || [], n = ts.length, target = a.target || 12;
+    const pend = ts.reduce((s, x) => s + dayInfo(x).pending.length, 0);
+    const doneToday = ts.filter(x => dayInfo(x).todayDone).length;
+    const open = S.openMine === a.id;
+    return `<div class="acard ${open ? "open" : ""}" data-mine="${esc(a.id)}">
+      <div class="top">${iconHtml(a)}
+        <div class="grow">
+          <div class="head"><div class="name ell">${esc(a.name)}</div>
+            ${a.active === false ? `<span class="tag m">${esc(t("hidden"))}</span>` : n >= target ? `<span class="tag g">${esc(t("enough"))}</span>` : `<span class="tag b">${esc(t("recruiting"))}</span>`}</div>
+          <div class="cnt">${n} / ${target} ${esc(t("testers"))}</div>
+          <div class="bar ${n >= target ? "full" : ""}"><i style="width:${Math.min(100, n / target * 100)}%"></i></div>
+          <div class="meta" style="margin-top:8px">
+            ${pend ? `<span class="badge">${esc(t("pendingN", { n: pend }))}</span>` : ""}
+            <span class="sub">${esc(t("todayN", { a: doneToday, b: n }))}</span>
+          </div>
+        </div></div>
+      ${open ? `<div class="xp" data-stop>${mineExpandedHtml(a, ts)}</div>` : ""}
     </div>`;
   }
-
-  // ---------------------------------------------------------------- join flow
-  function openJoin(a) {
-    const mine = a.ownerUid === S.user.uid;
-    const joined = S.joined[a.id];
-    const email = S.me.testerEmail || "";
-    const groupMode = a.mode !== "email";
-    const steps = groupMode ? [
-      `${esc(t("stepGroup", { email: email || "—" }))}<div><button class="btn small ghost" data-u="group" style="margin-top:6px">${esc(t("openGroup"))}</button></div>`,
-      `${esc(t("stepOptin"))}<div><button class="btn small ghost" data-u="optin" style="margin-top:6px">${esc(t("openOptin"))}</button></div>`,
-      `${esc(t("stepInstall"))}<div><button class="btn small ghost" data-u="play" style="margin-top:6px">${esc(t("openPlay"))}</button></div>`,
-      `${esc(t("stepProof"))}<div class="proofbox"></div><div><button class="btn small ghost proofbtn" style="margin-top:6px">📷 ${esc(t("pickProof"))}</button></div>`
-    ] : [
-      esc(t("stepConfirm")),
-      esc(t("stepEmail", { email: email || "—" })),
-      `${esc(t("stepOptin"))}<div><button class="btn small ghost" data-u="optin" style="margin-top:6px">${esc(t("openOptin"))}</button></div>`,
-      `${esc(t("stepInstall"))}<div><button class="btn small ghost" data-u="play" style="margin-top:6px">${esc(t("openPlay"))}</button></div>`
-    ];
-    sheet(`
-      <div class="row">${icon(a.name, a.pkg)}<div class="grow"><h2 style="margin:0">${esc(a.name)}</h2>
-        <div class="sub">${esc(t("by"))} ${esc(a.ownerName)} · ${a.testersCount || 0}/12 ${esc(t("testers"))}</div></div></div>
-      ${a.desc ? `<p class="desc">${esc(a.desc)}</p>` : ""}
-      ${mine ? `<div class="card" style="margin-top:12px">${esc(t("ownApp"))}</div>` : `
-      <div class="card" style="margin-top:12px">
-        <div class="title" style="white-space:normal">${esc(t("joinTitle"))}</div>
-        <div class="sub" style="white-space:normal">${esc(t("joinIntro"))}</div>
-        <ol class="steps">${steps.map((s, i) => `<li class="${joined && (groupMode ? i === 3 : i === 0) ? "done" : ""}">${s}</li>`).join("")}</ol>
-        ${joined ? `<button class="btn block ghost" disabled>✓ ${esc(t("joined"))}</button>`
-          : `<button class="btn block" id="jconfirm" ${groupMode ? "disabled" : ""}>${esc(t("confirmJoin", { p: P.join }))}</button>
-             ${groupMode ? `<div class="hint" id="jhint" style="text-align:center">${esc(t("proofNeed"))}</div>` : ""}`}
-      </div>`}
-      <div class="btns">
-        <button class="btn ghost" data-u="play">${esc(t("openPlay"))}</button>
-        ${mine ? "" : `<button class="btn ghost" id="jreport">${esc(t("report"))}</button>`}
-      </div>`, el => {
-      el.querySelectorAll("[data-u]").forEach(b => b.onclick = () => {
-        const k = b.dataset.u;
-        if (k === "group") { if (a.groupLink) openUrl(a.groupLink); }
-        else if (k === "optin") openUrl(optinUrl(a.pkg));
-        else openUrl(playUrl(a.pkg));
-      });
-      let proof = null;
-      const jc = $("#jconfirm", el);
-      if (jc) {
-        if (groupMode) proofPicker(el, d => { proof = d; jc.disabled = false; const h = $("#jhint", el); if (h) h.remove(); });
-        jc.onclick = () => doJoin(a, jc, proof);
+  function mineExpandedHtml(a, ts) {
+    const joinedSet = S.joined || {};
+    return `
+      <div class="sec" style="margin-top:0"><h2 style="font-size:16px">${esc(t("testersList"))} (${ts.length})</h2>
+        ${ts.length ? `<button class="link" data-act="copy">${esc(t("copyEmails"))}</button>` : ""}</div>
+      ${ts.length ? ts.map(x => {
+        const info = dayInfo(x);
+        const back = (S.apps || []).find(o => o.ownerUid === x.uid && o.active !== false && !joinedSet[o.id]);
+        return `<div class="person">
+          <div class="row"><div class="avatar">${esc((x.name || "?")[0].toUpperCase())}</div>
+            <div class="grow"><div style="font-weight:700" class="ell">${esc(x.name)}</div><div class="sub ell">${esc(x.email)}</div></div>
+            <div class="sub" style="text-align:right">${esc(info.finished ? t("days14") : t("dayX", { d: info.cur }))}</div></div>
+          ${daysStrip(info)}
+          ${back ? `<button class="btn small amber" style="margin-top:8px" data-goback="${esc(back.id)}">↩ ${esc(t("testBack"))}: ${esc(back.name)}</button>` : ""}
+          ${info.pending.length ? `<div data-proofs="${esc(x.uid)}"><div class="sub" style="margin-top:6px">${esc(t("loading"))}</div></div>` : ""}
+        </div>`;
+      }).join("") + legend() : `<p class="sub" style="margin:0">${esc(t("noTesters"))}</p>`}
+      <div class="sec"><h2 style="font-size:16px">${esc(t("feedbacks"))}</h2></div>
+      <div data-fbs><div class="sub">${esc(t("loading"))}</div></div>
+      <div class="btns"><button class="btn ghost small" data-act="share">${IC.share} ${esc(t("share"))}</button>
+        <button class="btn ghost small" data-act="edit">${IC.edit} ${esc(t("edit"))}</button></div>
+      <div class="btns"><button class="btn ghost small" data-act="toggle">${esc(a.active === false ? t("reopen") : t("hideApp"))}</button>
+        <button class="btn red small" data-act="del">${esc(t("del"))}</button></div>`;
+  }
+  async function bindMineExpanded(el, a) {
+    const ts = S.mineT[a.id] || [];
+    $$("[data-act]", el).forEach(b => b.onclick = async () => {
+      const k = b.dataset.act;
+      if (k === "copy") toast((await copyText(ts.map(x => x.email).filter(Boolean).join(", "))) ? t("copied") : t("errNet"));
+      else if (k === "share") {
+        const txt = t("shareText", { name: a.name }) + "\n" + optinUrl(a.pkg);
+        if (A) A.share(txt); else copyText(txt).then(() => toast(t("copied")));
+      } else if (k === "edit") addAppPage(a);
+      else if (k === "toggle") {
+        try { await appRef(a.id).update({ active: a.active === false }); S.apps = null; renderTab(); } catch (e) { toast(t("errNet")); }
+      } else if (k === "del") {
+        if (!(await ask(t("delAsk"), t("del"), true))) return;
+        try { await deleteAppDeep(a.id); S.openMine = null; S.apps = null; S.mine = null; renderTab(); } catch (e) { console.error(e); toast(t("errNet")); }
       }
-      const rp = $("#jreport", el); if (rp) rp.onclick = () => report({ type: "app", appId: a.id });
+    });
+    $$("[data-goback]", el).forEach(b => b.onclick = () => go("explore", { open: b.dataset.goback }));
+    // ảnh chờ duyệt
+    for (const box of $$("[data-proofs]", el)) {
+      const uid = box.dataset.proofs, x = ts.find(z => z.uid === uid); if (!x) continue;
+      const info = dayInfo(x);
+      const docs = await Promise.all(info.pending.map(d => testerRef(a.id, uid).collection("days").doc(d).get().catch(() => null)));
+      box.innerHTML = docs.map((s, i) => {
+        const d = info.pending[i], data = s && s.exists ? s.data() : {};
+        const idx = diffDays(x.joinDay || d, d) + 1;
+        return `<div class="proof" data-day="${esc(d)}">
+          <div class="row" style="margin-bottom:6px"><b class="grow">${esc(t("dayX", { d: idx }))}</b><span class="tag a">${esc(t("stP"))}</span></div>
+          ${data.img ? `<img src="${esc(data.img)}" alt="">` : ""}
+          ${data.note ? `<div class="sub" style="margin-top:6px">${esc(data.note)}</div>` : ""}
+          <div class="btns"><button class="btn red small" data-rv="r">✗ ${esc(t("reject"))}</button><button class="btn green small" data-rv="a">✓ ${esc(t("approve"))}</button></div>
+        </div>`;
+      }).join("");
+      $$(".proof img", box).forEach(im => im.onclick = () => sheet(`<img src="${im.src}" style="width:100%;border-radius:12px" alt="">`));
+      $$("[data-rv]", box).forEach(b => b.onclick = async () => {
+        const d = b.closest("[data-day]").dataset.day, v = b.dataset.rv;
+        busy(b, true);
+        try {
+          await testerRef(a.id, uid).update({ ["rev." + d]: v });
+          x.rev = Object.assign({}, x.rev, { [d]: v });
+          b.closest("[data-day]").remove();
+          toast(v === "a" ? t("approved") : t("rejected"));
+        } catch (e) { console.error(e); busy(b, false); toast(t("errNet")); }
+      });
+    }
+    // góp ý
+    try {
+      const fq = await appRef(a.id).collection("feedback").get();
+      const fbs = []; fq.forEach(d => fbs.push(Object.assign({ id: d.id }, d.data())));
+      fbs.sort((p, q) => ms(q.createdAt) - ms(p.createdAt));
+      const box = $("[data-fbs]", el);
+      if (box) box.innerHTML = fbs.length ? fbs.map(f => `<div class="fb"><b>${esc(f.name)}</b> <span class="sub">· ${esc(ago(f.createdAt))}</span>
+        <button class="link muted" style="float:right;padding:0;font-size:12px" data-rep="${esc(f.id)}">${esc(t("report"))}</button><p>${esc(f.text)}</p></div>`).join("")
+        : `<p class="sub" style="margin:0">${esc(t("noFeedback"))}</p>`;
+      $$("[data-rep]", el).forEach(b => b.onclick = () => report({ type: "feedback", appId: a.id, fbId: b.dataset.rep }));
+    } catch (e) {}
+  }
+  async function deleteAppDeep(appId) {
+    const ref = appRef(appId);
+    const tq = await ref.collection("testers").get();
+    const refs = [];
+    for (const d of tq.docs) {
+      const dq = await d.ref.collection("days").get();
+      dq.forEach(x => refs.push(x.ref));
+      refs.push(d.ref);
+    }
+    const fq = await ref.collection("feedback").get(); fq.forEach(d => refs.push(d.ref));
+    for (let i = 0; i < refs.length; i += 400) {
+      const b = db.batch(); refs.slice(i, i + 400).forEach(r => b.delete(r)); await b.commit();
+    }
+    await ref.delete();
+  }
+
+  // ================================================================ Trang đăng / sửa app
+  const CHIPS = ["chip14", "chipDaily", "chipFb", "chipShot"];
+  function addAppPage(a) {
+    const isNew = !a;
+    a = a || { name: "", pkg: "", icon: "", instr: "", target: 12 };
+    let icon = a.icon || "", confirmed = !isNew, groupOk = onboarded();
+    const instr0 = a.instr || a.desc || "";
+    page(isNew ? t("addApp") : t("edit"), `
+      <div class="card pre">
+        <h3>${esc(t("preTitle"))}</h3>
+        <h4>1. ${esc(t("preJoin"))}</h4>
+        <div id="pgroup"></div>
+        <h4>2. ${esc(t("preConsole"))}</h4>
+        <div class="warn">⚠️ ${esc(t("preWarn"))}</div>
+        ${copyRowHtml()}
+        <div class="btns"><button class="btn ghost" id="pconsole">${IC.ext} ${esc(t("goConsole"))}</button>
+          <button class="btn" id="pguide">${IC.help} ${esc(t("guideBtn"))}</button></div>
+        <div class="toggle ${confirmed ? "on" : ""}" id="ptoggle"><div class="sw"></div>
+          <div><b>⚠️ ${esc(t("reqConfirm"))}</b><small>${esc(t("reqConfirmBody"))}</small></div></div>
+      </div>
+      <div class="card">
+        <div class="title" style="font-size:17px">${esc(t("appDetails"))}</div>
+        <div class="upicon" id="picon">${icon ? `<img src="${esc(icon)}" alt="">` : `<div>${IC.img}<div>${esc(t("uploadIcon"))} <span style="color:var(--red)">*</span></div></div>`}</div>
+        <label class="l">${esc(t("appNameL"))}</label>
+        <input id="pname" type="text" maxlength="30" value="${esc(a.name)}" placeholder="${esc(t("appNamePh"))}">
+        <div class="count"><span id="pnc">${a.name.length}</span>/30</div>
+        <label class="l">${esc(t("playLinkL"))}</label>
+        <input id="plink" type="url" value="${esc(a.pkg)}" ${isNew ? "" : "disabled"} placeholder="https://play.google.com/store/apps/details?id=..." autocapitalize="off" spellcheck="false">
+        <div class="hint" id="ppkg">${esc(t("playLinkHint"))}</div>
+      </div>
+      <div class="card">
+        <div class="title" style="font-size:17px">${esc(t("testReq"))}</div>
+        <label class="l">${esc(t("targetL"))}</label>
+        <input id="ptarget" type="number" min="12" max="100" value="${a.target || 12}">
+        <label class="l">${esc(t("instrL"))} *</label>
+        <textarea id="pinstr" maxlength="250" placeholder="${esc(t("instrPh"))}">${esc(instr0)}</textarea>
+        <div class="count"><span id="pic">${instr0.length}</span>/250</div>
+        <div class="chips">${CHIPS.map(k => `<button data-chip="${k}">+ ${esc(t(k + "L"))}</button>`).join("")}</div>
+      </div>
+      <div class="err" id="perr"></div>
+      <button class="btn block" id="psave" style="padding:16px;font-size:16px">${esc(isNew ? t("addAppBtn") : t("save"))}</button>`,
+    pg => {
+      let opened = false;
+      const paintGroup = () => {
+        $("#pgroup", pg).innerHTML = groupOk
+          ? `<div class="okbox">${IC.check}<div>${esc(t("groupJoined"))}<small>${esc(CG.email)}</small></div></div>`
+          : `<button class="btn block" id="pjoin">${esc(t("ob1Btn"))}</button>
+             <button class="btn block green" id="pjoined" style="margin-top:8px" ${opened ? "" : "disabled"}>✓ ${esc(t("joinedGroupBtn"))}</button>
+             <div class="hint">${esc(t("step1Hint"))}</div>`;
+        const j = $("#pjoin", pg); if (j) j.onclick = () => { openUrl(CG.link); opened = true; paintGroup(); };
+        const d = $("#pjoined", pg); if (d) d.onclick = () => { setOnboarded(); groupOk = true; paintGroup(); };
+      };
+      paintGroup(); bindCopy(pg);
+      $("#pconsole", pg).onclick = () => openUrl(CONSOLE_URL);
+      $("#pguide", pg).onclick = () => slideGuide();
+      $("#ptoggle", pg).onclick = () => { confirmed = !confirmed; $("#ptoggle", pg).classList.toggle("on", confirmed); };
+      $("#picon", pg).onclick = async () => {
+        const d = await pickImage({ square: 160, limit: 60000 });
+        if (!d) { toast(t("imgBad")); return; }
+        icon = d; $("#picon", pg).innerHTML = `<img src="${d}" alt="">`;
+      };
+      const nm = $("#pname", pg), ins = $("#pinstr", pg), lk = $("#plink", pg);
+      nm.oninput = () => $("#pnc", pg).textContent = nm.value.length;
+      ins.oninput = () => $("#pic", pg).textContent = ins.value.length;
+      lk.oninput = () => {
+        const p = pkgFrom(lk.value);
+        $("#ppkg", pg).innerHTML = isPkg(p) ? `✓ <b style="color:var(--green)">${esc(p)}</b>` : esc(t("playLinkHint"));
+      };
+      $$("[data-chip]", pg).forEach(b => b.onclick = () => {
+        const add = t(b.dataset.chip + "T");
+        let v = ins.value.trim(); v = v ? v + (/[.!?]$/.test(v) ? " " : ". ") + add : add;
+        ins.value = v.slice(0, 250); ins.oninput();
+      });
+      $("#psave", pg).onclick = async ev => {
+        const err = $("#perr", pg);
+        const name = nm.value.trim(), pkg = isNew ? pkgFrom(lk.value) : a.pkg, instr = ins.value.trim();
+        const target = Math.max(12, Math.min(100, parseInt($("#ptarget", pg).value, 10) || 12));
+        if (!groupOk) { err.textContent = t("errGroupStep"); $("#pgroup", pg).scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+        if (!confirmed) { err.textContent = t("errConfirm"); $("#ptoggle", pg).scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+        if (!icon) { err.textContent = t("errIcon"); return; }
+        if (!name) { err.textContent = t("errAppName"); return; }
+        if (isNew && !isPkg(pkg)) { err.textContent = t("errPkg"); return; }
+        if (instr.length < 5) { err.textContent = t("errInstr"); return; }
+        err.textContent = ""; busy(ev.target, true);
+        try {
+          if (isNew) {
+            const mine = await loadMine(true);
+            if (mine.filter(x => x.active !== false).length >= 5) { err.textContent = t("maxApps"); busy(ev.target, false); return; }
+            const dup = await db.collection("apps").where("pkg", "==", pkg).limit(1).get();
+            if (!dup.empty) { err.textContent = t("errDupPkg"); busy(ev.target, false); return; }
+            await db.collection("apps").add({
+              ownerUid: S.user.uid, ownerName: S.me.name, ownerStars: S.me.stars || 0,
+              name, pkg, icon, instr, target, mode: "community", active: true,
+              testersCount: 0, feedbackCount: 0, createdAt: FV.serverTimestamp()
+            });
+          } else {
+            await appRef(a.id).update({ name, icon, instr, target, ownerName: S.me.name });
+          }
+          closeAll(); toast(t("saved"));
+          S.apps = null; S.mine = null; S.openMine = null;
+          if (S.tab !== "home") go("home"); else renderTab();
+        } catch (e) { console.error(e); err.textContent = t("errNet"); busy(ev.target, false); }
+      };
     });
   }
 
-  async function doJoin(a, btn, proof) {
-    if (!isGmail(S.me.testerEmail || "")) { toast(t("needTesterEmail")); closeAll(); go("me"); return; }
+  const CONSOLE_URL = "https://play.google.com/console/u/0/developers";
+  // 5 hình vẽ mô phỏng Play Console (khung trắng, ô tím là chỗ cần bấm)
+  function slideSvg(i) {
+    const P = '#8B5CF6', TX = '#202124', MU = '#5F6368', BL = '#1A73E8';
+    const box = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="none" stroke="${P}" stroke-width="3"/>`;
+    const txt = (x, y, s, c, sz, w) => `<text x="${x}" y="${y}" font-size="${sz || 12}" fill="${c || TX}" ${w ? 'font-weight="700"' : ""}>${s}</text>`;
+    const cb = (x, y) => `<rect x="${x}" y="${y}" width="13" height="13" rx="2" fill="${BL}"/><path d="M${x + 3} ${y + 7}l3 3 5-6" stroke="#fff" stroke-width="2" fill="none"/>`;
+    const tabs = act => ["Releases", "Countries/regions", "Testers"].map((n, k) => {
+      const xs = [14, 82, 196][k];
+      return txt(xs, 26, n, k === act ? BL : MU, 11.5, k === act) + (k === act ? `<rect x="${xs - 4}" y="32" width="${[60, 108, 50][k]}" height="3" fill="${BL}"/>` : "");
+    }).join("") + `<line x1="0" y1="35" x2="300" y2="35" stroke="#E0E0E0"/>`;
+    const S = [
+      // 1: menu
+      `<rect width="300" height="40" fill="#fff"/><path d="M14 14h16M14 20h16M14 26h16" stroke="${MU}" stroke-width="2"/>
+       <path d="M42 12l14 8-14 8z" fill="${BL}"/>${txt(62, 25, "Google Play", MU, 13)}${txt(140, 25, "Console", BL, 13)}
+       ${["Dashboard", "Statistics", "Publishing overview"].map((n, k) => txt(46, 66 + k * 26, n, TX, 12)).join("")}
+       <rect x="10" y="136" width="200" height="186" rx="12" fill="#D3E3FD"/>${txt(46, 158, "Test and release", BL, 12.5, 1)}
+       ${["Latest releases and bundles", "Production"].map((n, k) => `<rect x="18" y="${170 + k * 32}" width="184" height="26" rx="6" fill="#fff"/>` + txt(28, 188 + k * 32, n, TX, 11)).join("")}
+       <rect x="18" y="234" width="184" height="84" rx="6" fill="#fff"/>${txt(28, 252, "Testing  ▴", TX, 11)}
+       ${txt(40, 272, "Open testing", TX, 11)}${txt(40, 293, "Closed testing", TX, 11, 1)}${box(32, 279, 102, 20)}${txt(40, 314, "Internal testing", TX, 11)}`,
+      // 2: manage track
+      `${txt(14, 34, "Closed testing", TX, 17, 1)}<rect x="190" y="50" width="96" height="26" rx="4" fill="${BL}"/>${txt(204, 67, "Create track", "#fff", 11, 1)}
+       ${txt(14, 100, "Test pre-release versions with your own groups", MU, 10)}<line x1="14" y1="118" x2="286" y2="118" stroke="#E0E0E0"/>
+       ${txt(14, 148, "Tracks", TX, 15, 1)}${txt(14, 182, "Closed testing - Alpha", TX, 12.5)}${txt(14, 200, "1 (1.0.0) · Last updated", MU, 10)}
+       ${txt(206, 186, "Manage track", BL, 11.5, 1)}${box(198, 170, 88, 24)}`,
+      // 3: countries
+      `${tabs(1)}${txt(14, 68, "Countries/regions", TX, 16, 1)}<rect x="14" y="82" width="150" height="24" rx="4" fill="#E8F0FE"/>${txt(22, 98, "All countries/regions ▾", BL, 10.5)}
+       <line x1="14" y1="150" x2="286" y2="150" stroke="#E0E0E0"/>${cb(22, 132)}${box(16, 126, 25, 25)}${txt(48, 143, "Country / region", MU, 10.5)}${txt(200, 143, "Status", MU, 10.5)}
+       ${["Albania", "Algeria", "Angola", "Argentina"].map((n, k) => cb(22, 164 + k * 32) + txt(48, 175 + k * 32, n, TX, 11.5) + txt(200, 175 + k * 32, "✓ Targeted", "#188038", 11)).join("")}`,
+      // 4: testers
+      `${tabs(2)}${txt(14, 68, "Testers", TX, 16, 1)}${txt(14, 96, "Choose who can access your test.", MU, 10.5)}
+       <circle cx="24" cy="124" r="7" fill="none" stroke="${MU}" stroke-width="1.6"/>${txt(40, 128, "Email lists", TX, 11.5)}
+       <circle cx="24" cy="156" r="7" fill="none" stroke="${BL}" stroke-width="1.6"/><circle cx="24" cy="156" r="3.5" fill="${BL}"/>${txt(40, 160, "Google Groups", TX, 11.5, 1)}${box(12, 143, 118, 26)}
+       ${txt(40, 192, "Email addresses", MU, 10)}<rect x="40" y="200" width="246" height="56" rx="4" fill="#fff" stroke="#DADCE0"/>
+       <rect x="48" y="212" width="226" height="24" rx="12" fill="#F1F3F4" stroke="#DADCE0"/>${txt(58, 228, esc(CG.email), TX, 10.5)}${box(36, 196, 254, 64)}
+       ${txt(40, 280, "Only members of the Google Groups", MU, 9.5)}${txt(40, 293, "you specify can join your test.", MU, 9.5)}`,
+      // 5: save & send
+      `${txt(14, 26, "If you save, changes will be ready to send", MU, 10.5)}${txt(14, 40, "for review.", MU, 10.5)}
+       ${txt(170, 70, "Discard", MU, 11.5)}<rect x="222" y="54" width="60" height="26" rx="4" fill="${BL}"/>${txt(238, 71, "Save", "#fff", 11.5, 1)}${box(216, 48, 72, 38)}
+       <rect x="10" y="100" width="280" height="96" rx="8" fill="#fff" stroke="#DADCE0"/>${txt(22, 124, "Go to Publishing overview?", TX, 12.5, 1)}
+       ${txt(22, 144, "Your change has been saved.", MU, 10)}${txt(110, 180, "Not now", MU, 11)}<rect x="170" y="164" width="108" height="24" rx="4" fill="${BL}"/>${txt(184, 181, "Go to overview", "#fff", 11, 1)}${box(164, 158, 120, 36)}
+       ${txt(14, 232, "Changes not yet sent for review", TX, 13.5, 1)}<rect x="20" y="248" width="170" height="28" rx="4" fill="${BL}"/>${txt(32, 267, "Send 1 change for review", "#fff", 11, 1)}${box(14, 242, 182, 40)}`
+    ];
+    return `<svg viewBox="0 0 300 330" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,Roboto,sans-serif" style="width:100%;display:block;background:#fff;border-radius:16px">${S[i]}</svg>`;
+  }
+  function slideGuide() {
+    let i = 0; const N = 5;
+    sheet(`<div id="sg"></div>`, el => {
+      const paint = () => {
+        $("#sg", el).innerHTML = `
+          <div class="row"><h2 class="grow" style="margin:0">${esc(t("slTitle"))}</h2><button class="ibtn" data-s="x">✕</button></div>
+          <div class="row" style="margin:6px 0 12px"><span class="sub grow">${esc(t("slStep", { a: i + 1, b: N }))}</span>
+            <span class="dots" style="margin:0">${Array.from({ length: N }, (_, k) => `<i class="${k <= i ? "on" : ""}" style="width:${k === i ? 22 : 9}px"></i>`).join("")}</span></div>
+          ${slideSvg(i)}
+          <p style="margin:12px 2px 0;font-size:15px">${esc(t("sl" + (i + 1), { email: CG.email }))}</p>
+          ${i === 3 ? copyRowHtml() : ""}
+          <div class="btns">${i ? `<button class="btn ghost" data-s="b">${esc(t("back"))}</button>` : `<button class="btn ghost" data-s="c">${IC.ext} ${esc(t("goConsole"))}</button>`}
+            <button class="btn" data-s="n">${esc(i === N - 1 ? t("doneBtn") : t("next"))}</button></div>`;
+        bindCopy(el);
+        $$("[data-s]", el).forEach(b => b.onclick = () => {
+          const k = b.dataset.s;
+          if (k === "x") closeTop();
+          else if (k === "c") openUrl(CONSOLE_URL);
+          else if (k === "b") { i--; paint(); }
+          else if (i === N - 1) closeTop(); else { i++; paint(); }
+        });
+      };
+      paint();
+    });
+  }
+
+  function guideSheet(kind) {
+    const steps = kind === "post" ? ["gp1", "gp2", "gp3", "gp4", "gp5"] : ["gt1", "gt2", "gt3", "gt4", "gt5"];
+    sheet(`<h2>${esc(t(kind === "post" ? "guidePost" : "guideTest"))}</h2>
+      <ol class="guide">${steps.map(k => `<li>${esc(t(k, { email: CG.email }))}</li>`).join("")}</ol>
+      ${kind === "post" ? phoneSvg() + `<div class="btns"><button class="btn ghost" id="gcons">${esc(t("openConsole"))}</button></div>` : ""}
+      <button class="btn block ghost" style="margin-top:12px" id="gclose">${esc(t("close"))}</button>`, el => {
+      $("#gclose", el).onclick = closeTop;
+      const c = $("#gcons", el); if (c) c.onclick = () => openUrl("https://play.google.com/console");
+    });
+  }
+
+  // ================================================================ TAB 2: Khám phá
+  function sortApps(list) {
+    const me = S.user.uid;
+    return list.slice().sort((x, y) => {
+      if ((x.ownerUid === me) !== (y.ownerUid === me)) return x.ownerUid === me ? 1 : -1;
+      const fx = (x.testersCount || 0) >= (x.target || 12), fy = (y.testersCount || 0) >= (y.target || 12);
+      if (fx !== fy) return fx ? 1 : -1;
+      if (!fx && (y.ownerStars || 0) !== (x.ownerStars || 0)) return (y.ownerStars || 0) - (x.ownerStars || 0);
+      return ms(y.createdAt) - ms(x.createdAt);
+    });
+  }
+  async function renderExplore(m, opts) {
+    if (opts && opts.open) { S.open = opts.open; S.q = ""; }
+    if (!S.apps) spin(m);
+    try { await Promise.all([loadApps(), loadJoined(), S.mine ? null : loadMine()]); }
+    catch (e) { console.error(e); return failBox(m, () => renderExplore(m)); }
+    if (S.tab !== "explore") return;
+    const visible = S.apps.filter(a => a.active !== false);
+    const latest = visible.slice(0, 6);
+    m.innerHTML = header(t("exTitle"), t("exSub"),
+      `<button class="rbtn g" id="xgroup">${IC.check}</button><button class="rbtn a" id="xhelp">?</button>`) + `
+      <div class="search">${IC.search}<input id="xq" type="text" placeholder="${esc(t("searchPh"))}" value="${esc(S.q)}"></div>
+      <div id="xlatest">${latest.length ? `<div class="sec"><h2>${esc(t("latest"))}</h2></div>
+        <div class="carousel" id="xcar">${latest.map(a => appCard(a, true)).join("")}</div>
+        <div class="dots" id="xdots">${latest.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}</div>
+      <div class="sec"><h2>${esc(t("allApps"))}</h2><span id="xcount"></span></div>
+      <div id="xlist"></div>`;
+    $("#xgroup").onclick = () => sheet(onboardHtml(true), bindOnboard);
+    $("#xhelp").onclick = () => guideSheet("test");
+    const car = $("#xcar");
+    if (car) {
+      car.onscroll = () => {
+        const w = car.firstElementChild ? car.firstElementChild.offsetWidth + 12 : 1;
+        const i = Math.round(Math.abs(car.scrollLeft) / w);
+        $$("#xdots i").forEach((d, j) => d.classList.toggle("on", j === i));
+      };
+      $$("[data-app]", car).forEach(el => el.onclick = () => { S.open = el.dataset.app; S.q = ""; $("#xq").value = ""; paintList(true); });
+    }
+    const q = $("#xq");
+    q.oninput = () => { S.q = q.value; $("#xlatest").classList.toggle("hidden", !!S.q.trim()); paintList(); };
+    $("#xlatest").classList.toggle("hidden", !!S.q.trim());
+    paintList(!!S.open);
+  }
+  function paintList(scroll) {
+    const box = $("#xlist"); if (!box) return;
+    const qq = S.q.trim().toLowerCase();
+    let list = sortApps(S.apps.filter(a => a.active !== false));
+    if (qq) list = list.filter(a => (a.name || "").toLowerCase().includes(qq) || (a.ownerName || "").toLowerCase().includes(qq) || (a.pkg || "").toLowerCase().includes(qq));
+    $("#xcount").textContent = t("nApps", { n: list.length });
+    box.innerHTML = list.length ? list.map(a => appCard(a, false)).join("")
+      : `<div class="empty"><div class="big">🚀</div><p>${esc(qq ? t("noResult") : t("noApps"))}</p></div>`;
+    $$("[data-app]", box).forEach(el => el.addEventListener("click", e => {
+      if (e.target.closest("[data-stop]")) return;
+      S.open = S.open === el.dataset.app ? null : el.dataset.app;
+      paintList();
+    }));
+    if (S.open) {
+      const el = $(`[data-app="${S.open}"]`, box);
+      const a = S.apps.find(x => x.id === S.open);
+      if (el && a) { bindExpanded(el, a); if (scroll) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }
+    }
+  }
+  function backedMe(a) {
+    // chủ app này đang test app của mình?
+    return Object.values(S.mineT || {}).some(arr => arr.some(x => x.uid === a.ownerUid));
+  }
+  function appCard(a, mini) {
+    const n = a.testersCount || 0, target = a.target || 12;
+    const mine = a.ownerUid === S.user.uid, joined = S.joined && S.joined[a.id];
+    const open = !mini && S.open === a.id;
+    const tag = mine ? `<span class="tag m">${esc(t("yours"))}</span>`
+      : joined ? `<span class="tag g">${esc(t("testing"))}</span>`
+      : backedMe(a) ? `<span class="tag a">${esc(t("testedYou"))}</span>` : "";
+    return `<div class="acard ${open ? "open" : ""}" data-app="${esc(a.id)}">
+      <div class="top">${iconHtml(a)}
+        <div class="grow">
+          <div class="head"><div class="name ell">${esc(a.name)}</div>${tag}</div>
+          <div class="cnt">${n} / ${target} ${esc(t("testers"))}</div>
+          <div class="meta"><span class="chip">${esc(a.ownerName || "")}</span><span style="display:inline-flex;align-items:center;gap:3px">${starTxt(a.ownerStars)}</span>
+            <span class="when">${esc(ago(a.createdAt))}</span></div>
+        </div></div>
+      ${open ? `<div class="xp" data-stop>${expandedHtml(a)}</div>` : ""}
+    </div>`;
+  }
+  const joinState = {}; // appId -> {play, img}
+  function expandedHtml(a) {
+    const n = a.testersCount || 0, target = a.target || 12;
+    const mine = a.ownerUid === S.user.uid, joined = S.joined && S.joined[a.id];
+    const st = joinState[a.id] || (joinState[a.id] = { play: false, img: null });
+    const top = `<div class="row" style="margin-bottom:10px">
+        <div class="grow"><div class="bar ${n >= target ? "full" : ""}"><i style="width:${Math.min(100, n / target * 100)}%"></i></div></div>
+        <div class="iconbtns"><button class="ibtn" data-x="share">${IC.share}</button>${mine ? "" : `<button class="ibtn r" data-x="report">${IC.flag}</button>`}</div></div>
+      ${a.instr || a.desc ? `<div class="instr">${IC.info}<div>${esc(a.instr || a.desc)}</div></div>` : ""}`;
+    if (mine) return top + `<button class="btn block ghost" style="margin-top:12px" data-x="home">${esc(t("yourApp"))}</button>`;
+    if (joined) return top + `<button class="btn block done" style="margin-top:12px" data-x="tasks">✓ ${esc(t("goTask"))}</button>`;
+    return top + `
+      <button class="stepbtn ${st.play ? "ok" : ""}" data-x="play"><span class="n">${st.play ? "✓" : "1"}</span><span class="grow">${esc(t("stepPlay"))}</span></button>
+      <button class="stepbtn ${st.img ? "ok" : ""}" data-x="shot"><span class="n">${st.img ? "✓" : "2"}</span><span class="grow">${esc(t("stepShot"))}</span>${st.img ? `<img class="thumb" src="${st.img}" alt="">` : ""}</button>
+      <button class="btn block green" style="margin-top:12px" data-x="done" ${st.play && st.img ? "" : "disabled"}>${esc(t("finishJoin", { p: ST.join }))}</button>`;
+  }
+  function bindExpanded(el, a) {
+    $$("[data-x]", el).forEach(b => b.onclick = async ev => {
+      ev.stopPropagation();
+      const k = b.dataset.x, st = joinState[a.id];
+      if (k === "share") { const txt = t("shareText", { name: a.name }) + "\n" + optinUrl(a.pkg); if (A) A.share(txt); else copyText(txt).then(() => toast(t("copied"))); }
+      else if (k === "report") report({ type: "app", appId: a.id });
+      else if (k === "home") go("home");
+      else if (k === "tasks") { S.openTask = a.id; go("tasks"); }
+      else if (k === "play") { openUrl(optinUrl(a.pkg)); st.play = true; setTimeout(() => paintList(), 400); }
+      else if (k === "shot") { const d = await pickImage(); if (!d) { toast(t("imgBad")); return; } st.img = d; paintList(); }
+      else if (k === "done") doJoin(a, b);
+    });
+  }
+
+  async function doJoin(a, btn) {
+    if (!isGmail(S.me.testerEmail || "")) { toast(t("needGmail")); go("me"); editProfile(); return; }
+    const st = joinState[a.id]; if (!st || !st.play || !st.img) return;
     busy(btn, true);
-    const uid = S.user.uid, day = todayStr();
-    const b = db.batch();
-    b.set(db.collection("apps").doc(a.id).collection("testers").doc(uid), {
-      uid, name: S.me.name, email: S.me.testerEmail, joinedAt: FV.serverTimestamp(), days: 1, lastDay: day, proof: !!proof
-    });
-    b.set(db.collection("users").doc(uid).collection("joined").doc(a.id), {
-      appId: a.id, name: a.name, pkg: a.pkg, ownerName: a.ownerName || "", mode: a.mode || "group",
-      groupLink: a.groupLink || "", joinedAt: FV.serverTimestamp(), days: 1, lastDay: day, fbGiven: false, proof: !!proof
-    });
-    if (proof) b.set(db.collection("apps").doc(a.id).collection("proofs").doc(uid), { img: proof, createdAt: FV.serverTimestamp() });
-    b.update(db.collection("apps").doc(a.id), { testersCount: FV.increment(1) });
-    b.update(db.collection("users").doc(uid), { points: FV.increment(P.join) });
+    const uid = S.user.uid, day = today();
     try {
+      const b = db.batch();
+      b.set(testerRef(a.id, uid), { uid, name: S.me.name, email: S.me.testerEmail, joinedAt: FV.serverTimestamp(), joinDay: day, sub: { [day]: true }, rev: {} });
+      b.set(testerRef(a.id, uid).collection("days").doc(day), { img: st.img, note: "", at: FV.serverTimestamp() });
+      b.set(userRef().collection("joined").doc(a.id), {
+        appId: a.id, name: a.name, pkg: a.pkg, icon: a.icon || "", ownerUid: a.ownerUid, ownerName: a.ownerName || "",
+        joinedAt: FV.serverTimestamp(), joinDay: day, fbGiven: false, bonus: false
+      });
+      b.update(appRef(a.id), { testersCount: FV.increment(1) });
+      const ns = await addStarsTo(b, ST.join);
       await b.commit();
+      gotStars(ns);
       a.testersCount = (a.testersCount || 0) + 1;
-      S.joined[a.id] = { id: a.id, appId: a.id, name: a.name, pkg: a.pkg, ownerName: a.ownerName, mode: a.mode,
-        groupLink: a.groupLink, joinedAt: new Date(), days: 1, lastDay: day, fbGiven: false, proof: !!proof };
-      addPoints(P.join);
-      closeAll(); toast(t("joinedOk"));
-      renderTab();
+      S.joined[a.id] = { id: a.id, appId: a.id, name: a.name, pkg: a.pkg, icon: a.icon, ownerUid: a.ownerUid, ownerName: a.ownerName, joinDay: day, fbGiven: false };
+      S.tdocs[a.id] = { joinDay: day, sub: { [day]: true }, rev: {} };
+      delete joinState[a.id];
+      // lần đầu tham gia: bật sẵn nhắc giờ test
+      const r = getReminder(); if (!r.set) applyReminder({ on: true, time: r.time || "20:00", set: true });
+      toast(t("joinedOk"));
+      paintList();
     } catch (e) { console.error(e); busy(btn, false); toast(t("errNet")); }
   }
 
   function report(info) {
     ask(t("reportAsk"), t("report"), true).then(async ok => {
       if (!ok) return;
-      try {
-        await db.collection("reports").add(Object.assign({ by: S.user.uid, createdAt: FV.serverTimestamp() }, info));
-        toast(t("reportOk"));
-      } catch (e) { toast(t("errNet")); }
+      try { await db.collection("reports").add(Object.assign({ by: S.user.uid, createdAt: FV.serverTimestamp() }, info)); toast(t("reportOk")); }
+      catch (e) { toast(t("errNet")); }
     });
   }
 
-  // ---------------------------------------------------------------- testing
-  async function renderTesting(m) {
-    spin(m);
-    try { await loadJoined(true); } catch (e) { return failBox(m, () => renderTesting(m)); }
-    if (S.tab !== "testing") return;
-    const list = Object.values(S.joined).sort((a, b) =>
-      (a.lastDay === todayStr()) - (b.lastDay === todayStr()) || ms(b.joinedAt) - ms(a.joinedAt));
-    if (!list.length) {
-      m.innerHTML = `<div class="empty"><div class="big">🧪</div><p>${esc(t("testingEmpty"))}</p>
-        <button class="btn" id="goex">${esc(t("tabExplore"))}</button></div>`;
-      $("#goex").onclick = () => go("explore"); return;
-    }
-    const today = todayStr();
-    m.innerHTML = list.map(j => {
-      const d = Math.min(j.days || 0, 14), done = (j.days || 0) >= 14, checked = j.lastDay === today;
-      return `<div class="card" data-j="${esc(j.id)}">
-        <div class="row">${icon(j.name, j.pkg)}<div class="grow"><div class="title">${esc(j.name)}</div>
-          <div class="sub">${esc(t("by"))} ${esc(j.ownerName)} · ${esc(t("ofDays", { d }))}</div></div></div>
-        <div class="days">${Array.from({ length: 14 }, (_, i) => `<i class="${i < d ? "on" : ""}"></i>`).join("")}</div>
-        ${done ? `<p class="sub" style="margin:8px 0 0">${esc(t("finished"))}</p>` : ""}
-        <div class="btns">
-          <button class="btn ${checked ? "ghost" : ""}" data-act="check">${checked ? "✓ " + esc(t("checkedToday")) : esc(t("checkin"))}</button>
-        </div>
-        <div class="btns" style="margin-top:8px">
-          <button class="btn small ghost" data-act="fb">${esc(t("feedback"))}</button>
-          ${j.proof ? "" : `<button class="btn small amber" data-act="proof">📷 ${esc(t("sendProof"))}</button>`}
-          <button class="btn small ghost" data-act="optin">${esc(t("openOptin"))}</button>
-          <button class="btn small ghost" data-act="more">⋯</button>
-        </div></div>`;
-    }).join("");
-    m.querySelectorAll("[data-j]").forEach(card => {
-      const j = S.joined[card.dataset.j];
-      card.querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
-        const act = b.dataset.act;
-        if (act === "check") checkin(j, b);
-        else if (act === "fb") feedbackSheet(j);
-        else if (act === "optin") openUrl(optinUrl(j.pkg));
-        else if (act === "proof") proofSheet(j);
-        else moreTesting(j);
-      });
-    });
+  // ================================================================ TAB 3: Nhiệm vụ
+  async function loadTaskDocs() {
+    const ids = Object.keys(S.joined);
+    await Promise.all(ids.map(async id => {
+      try { const s = await testerRef(id, S.user.uid).get(); S.tdocs[id] = s.exists ? s.data() : null; }
+      catch (e) { S.tdocs[id] = null; }
+    }));
   }
-
-  async function checkin(j, btn) {
-    if (A) A.openApp(j.pkg); else openUrl(playUrl(j.pkg));
-    const day = todayStr();
-    if (j.lastDay === day) return;
-    busy(btn, true);
-    const uid = S.user.uid, b = db.batch();
-    b.update(db.collection("apps").doc(j.appId).collection("testers").doc(uid), { days: FV.increment(1), lastDay: day });
-    b.update(db.collection("users").doc(uid).collection("joined").doc(j.appId), { days: FV.increment(1), lastDay: day });
-    b.update(db.collection("users").doc(uid), { points: FV.increment(P.checkin) });
+  async function renderTasks(m) {
+    if (!S.joined) spin(m);
     try {
+      await Promise.all([loadJoined(true), loadApps(), S.mine ? null : loadMine()]);
+      await Promise.all([loadTaskDocs(), loadMineTesters()]);
+    } catch (e) { console.error(e); return failBox(m, () => renderTasks(m)); }
+    if (S.tab !== "tasks") return;
+    const all = Object.values(S.joined);
+    const active = [], done = [], gone = [];
+    all.forEach(j => {
+      const td = S.tdocs[j.id];
+      if (!td) { gone.push(j); return; }
+      (dayInfo(td).finished ? done : active).push(j);
+    });
+    active.sort((x, y) => dayInfo(S.tdocs[x.id]).todayDone - dayInfo(S.tdocs[y.id]).todayDone);
+    // cần test lại: người đã test app của mình nhưng mình chưa test app của họ
+    const backers = new Set(); Object.values(S.mineT).forEach(arr => arr.forEach(x => backers.add(x.uid)));
+    const backList = (S.apps || []).filter(a => backers.has(a.ownerUid) && a.active !== false && !S.joined[a.id]);
+    const dot = $("#taskdot"); if (dot) dot.classList.toggle("hidden", !active.some(j => !dayInfo(S.tdocs[j.id]).todayDone));
+
+    m.innerHTML = header(t("tasksTitle"), t("tasksSub"), `<span class="starpill mystars">${starTxt(S.me.stars)}</span>`) +
+      (backList.length ? `<div class="sec"><h2>↩ ${esc(t("needBack"))}</h2><span>${backList.length}</span></div>` +
+        backList.map(a => `<div class="acard" data-goapp="${esc(a.id)}"><div class="top">${iconHtml(a, "s")}<div class="grow">
+          <div class="name ell" style="font-size:15.5px">${esc(a.name)}</div><div class="sub ell">${esc(t("backHint", { name: a.ownerName || "" }))}</div></div>
+          <button class="btn small amber">${esc(t("testBack"))}</button></div></div>`).join("") : "") +
+      `<div class="sec"><h2>${esc(t("activeTests"))}</h2><span>${active.length}</span></div>` +
+      (active.length ? active.map(j => taskCard(j)).join("")
+        : `<div class="empty"><div class="big">🧪</div><p>${esc(t("tasksEmpty"))}</p><button class="btn" id="goex">${esc(t("tabExplore"))}</button></div>`) +
+      (done.length ? `<div class="sec"><h2>✅ ${esc(t("doneTests"))}</h2><span>${done.length}</span></div>` + done.map(j => taskCard(j, true)).join("") : "") +
+      (gone.length ? `<div class="sec"><h2>${esc(t("goneTests"))}</h2></div>` + gone.map(j => `<div class="acard"><div class="top">${iconHtml(j, "s")}<div class="grow"><div class="name ell" style="font-size:15px">${esc(j.name)}</div><div class="sub">${esc(t("goneHint"))}</div></div><button class="btn small ghost" data-rm="${esc(j.id)}">${esc(t("remove"))}</button></div></div>`).join("") : "");
+    const ge = $("#goex"); if (ge) ge.onclick = () => go("explore");
+    $$("[data-goapp]", m).forEach(el => el.onclick = () => go("explore", { open: el.dataset.goapp }));
+    $$("[data-rm]", m).forEach(b => b.onclick = async () => { try { await userRef().collection("joined").doc(b.dataset.rm).delete(); renderTasks(m); } catch (e) { toast(t("errNet")); } });
+    $$("[data-task]", m).forEach(el => el.addEventListener("click", e => {
+      if (e.target.closest("[data-stop]")) return;
+      S.openTask = S.openTask === el.dataset.task ? null : el.dataset.task; renderTasks(m);
+    }));
+    if (S.openTask) { const el = $(`[data-task="${S.openTask}"]`, m); if (el && S.joined[S.openTask]) bindTask(el, S.joined[S.openTask]); }
+    claimBonuses(done);
+  }
+  function pairInfo(j) {
+    // chủ app j có đang test app của mình không? -> số ngày họ đã test
+    let best = null;
+    Object.values(S.mineT).forEach(arr => arr.forEach(x => { if (x.uid === j.ownerUid) { const i = dayInfo(x); if (!best || i.done > best.done) best = i; } }));
+    return best;
+  }
+  function taskCard(j, finished) {
+    const td = S.tdocs[j.id], info = dayInfo(td), open = S.openTask === j.id;
+    return `<div class="acard ${open ? "open" : ""}" data-task="${esc(j.id)}">
+      <div class="top">${iconHtml(j)}
+        <div class="grow">
+          <div class="head"><div class="name ell">${esc(j.name)}</div>
+            ${finished ? `<span class="tag g">${esc(t("finished"))}</span>` : info.todayDone ? `<span class="tag g">✓ ${esc(t("todayOk"))}</span>` : `<span class="tag a">${esc(t("todayTodo"))}</span>`}</div>
+          <div class="cnt">${esc(finished ? t("days14") : t("dayOf", { d: info.cur }))}${finished ? "" : ` · <span class="timer">${esc(untilMidnight())}</span>`}</div>
+          ${daysStrip(info)}
+        </div></div>
+      ${open ? `<div class="xp" data-stop>${taskExpandedHtml(j, info, finished)}</div>` : ""}
+    </div>`;
+  }
+  const taskShot = {}; // appId -> dataURL
+  function taskExpandedHtml(j, info, finished) {
+    const pair = pairInfo(j);
+    const app = (S.apps || []).find(a => a.id === j.id) || {};
+    return `
+      <div class="duo"><div class="y"><b>${info.done}/14</b><small>${esc(t("youTested"))}</small></div>
+        <div class="t"><b>${pair ? pair.done + "/14" : "–"}</b><small>${esc(t("theyTested"))}</small></div></div>
+      ${pair ? "" : `<div class="hint">${esc(t("noPair", { name: j.ownerName || "" }))}</div>`}
+      ${legend()}
+      ${app.instr ? `<div class="instr" style="margin-top:10px">${IC.info}<div>${esc(app.instr)}</div></div>` : ""}
+      ${finished ? "" : info.todayDone ? `<div class="okbox" style="margin-top:12px">${IC.check}<div>${esc(t("todaySent"))}<small>${esc(t("comeBack"))}</small></div></div>` : `
+        <div class="today"><b>${esc(t("dayX", { d: info.cur }))}</b><span class="tag b">${esc(t("todayLbl"))}</span><span class="timer">⏱ ${esc(untilMidnight())}</span></div>
+        <button class="stepbtn" data-t="open"><span class="n">1</span><span class="grow">${esc(t("openTheApp"))}</span></button>
+        <div class="drop" data-t="shot">${taskShot[j.id] ? `<img src="${taskShot[j.id]}" alt="">` : `${IC.cam}<div>${esc(t("uploadShot"))}</div><div class="sub" style="font-weight:500">${esc(t("oneShot"))}</div>`}</div>
+        <input type="text" id="tnote" maxlength="200" placeholder="${esc(t("notePh"))}" style="margin-top:10px">
+        <button class="btn block green" style="margin-top:10px" data-t="submit" ${taskShot[j.id] ? "" : "disabled"}>${esc(t("submitDay", { p: ST.day }))}</button>`}
+      <div class="btns"><button class="btn ghost small" data-t="fb">💬 ${esc(t("feedback"))}</button>
+        <button class="btn ghost small" data-t="play">${esc(t("openPlay"))}</button>
+        <button class="btn ghost small" data-t="more" style="flex:0 0 46px">⋯</button></div>`;
+  }
+  function bindTask(el, j) {
+    $$("[data-t]", el).forEach(b => b.onclick = async ev => {
+      ev.stopPropagation();
+      const k = b.dataset.t;
+      if (k === "open") { if (A) A.openApp(j.pkg); else openUrl(playUrl(j.pkg)); }
+      else if (k === "play") openUrl(optinUrl(j.pkg));
+      else if (k === "shot") { const d = await pickImage(); if (!d) { toast(t("imgBad")); return; } taskShot[j.id] = d; renderTasks($("#main")); }
+      else if (k === "submit") submitDay(j, b);
+      else if (k === "fb") feedbackSheet(j);
+      else if (k === "more") moreTask(j);
+    });
+  }
+  async function submitDay(j, btn) {
+    const day = today(), img = taskShot[j.id]; if (!img) return;
+    const note = (($("#tnote") || {}).value || "").trim().slice(0, 200);
+    busy(btn, true);
+    try {
+      const b = db.batch();
+      b.set(testerRef(j.id, S.user.uid).collection("days").doc(day), { img, note, at: FV.serverTimestamp() });
+      b.update(testerRef(j.id, S.user.uid), { ["sub." + day]: true });
+      const ns = await addStarsTo(b, ST.day);
       await b.commit();
-      j.days = (j.days || 0) + 1; j.lastDay = day; addPoints(P.checkin);
-      toast(t("checkinOk", { p: P.checkin }));
-      if (S.tab === "testing") renderTesting($("#main"));
+      gotStars(ns);
+      S.tdocs[j.id].sub = Object.assign({}, S.tdocs[j.id].sub, { [day]: true });
+      delete taskShot[j.id];
+      toast(t("daySent", { p: ST.day }));
+      renderTasks($("#main"));
+      cleanupOld(j);
     } catch (e) {
       console.error(e); busy(btn, false);
-      // app có thể đã bị chủ xóa
-      if (String(e && e.code).includes("not-found")) moreTesting(j); else toast(t("errNet"));
+      toast(String(e && e.code).includes("not-found") ? t("goneHint") : t("errNet"));
     }
   }
-
-  function proofSheet(j) {
-    let data = null;
-    sheet(`<h2>${esc(t("sendProof"))} · ${esc(j.name)}</h2>
-      <p class="sub" style="white-space:normal">${esc(t("stepProof"))}</p>
-      <div class="proofbox"></div>
-      <div class="btns"><button class="btn ghost proofbtn">📷 ${esc(t("pickProof"))}</button>
-      <button class="btn" id="psend" disabled>${esc(t("sendProof"))}</button></div>`, el => {
-      proofPicker(el, d => { data = d; $("#psend", el).disabled = false; });
-      $("#psend", el).onclick = async ev => {
-        busy(ev.target, true);
-        const uid = S.user.uid, b = db.batch();
-        b.set(db.collection("apps").doc(j.appId).collection("proofs").doc(uid), { img: data, createdAt: FV.serverTimestamp() });
-        b.update(db.collection("apps").doc(j.appId).collection("testers").doc(uid), { proof: true });
-        b.update(db.collection("users").doc(uid).collection("joined").doc(j.appId), { proof: true });
-        try { await b.commit(); j.proof = true; closeTop(); toast(t("proofOk")); renderTab(); }
-        catch (e) { console.error(e); busy(ev.target, false); toast(t("errNet")); }
-      };
-    });
+  // xóa ảnh cũ hơn 16 ngày để tiết kiệm dung lượng
+  async function cleanupOld(j) {
+    try {
+      const td = S.tdocs[j.id]; const limit = addDays(today(), -16);
+      const old = Object.keys(td.sub || {}).filter(d => d < limit);
+      if (!old.length) return;
+      const b = db.batch(); old.forEach(d => b.delete(testerRef(j.id, S.user.uid).collection("days").doc(d))); await b.commit();
+    } catch (e) {}
   }
-
+  async function claimBonuses(done) {
+    for (const j of done) {
+      if (j.bonus) continue;
+      const info = dayInfo(S.tdocs[j.id]);
+      if (info.done < 10) continue;
+      try {
+        const b = db.batch();
+        b.update(userRef().collection("joined").doc(j.id), { bonus: true });
+        const ns = await addStarsTo(b, ST.finish);
+        await b.commit(); j.bonus = true; gotStars(ns); toast(t("bonusOk", { p: ST.finish }));
+      } catch (e) {}
+    }
+  }
   function feedbackSheet(j) {
-    sheet(`<h2>${esc(t("feedback"))} · ${esc(j.name)}</h2>
+    sheet(`<h2>💬 ${esc(t("feedback"))} · ${esc(j.name)}</h2>
       <textarea id="fbt" maxlength="1000" placeholder="${esc(t("feedbackPh"))}"></textarea>
-      <div class="btns"><button class="btn" id="fbs">${esc(t("sendFeedback"))}${j.fbGiven ? "" : ` (+${P.feedback})`}</button></div>`, el => {
+      <div class="hint">${esc(t("playFbHint"))}</div>
+      <div class="btns"><button class="btn" id="fbs">${esc(t("sendFeedback"))}${j.fbGiven ? "" : ` (+${ST.feedback}⭐)`}</button></div>`, el => {
       $("#fbs", el).onclick = async ev => {
         const text = $("#fbt", el).value.trim();
         if (text.length < 15) { toast(t("feedbackShort")); return; }
         busy(ev.target, true);
-        const uid = S.user.uid, b = db.batch();
-        b.set(db.collection("apps").doc(j.appId).collection("feedback").doc(), {
-          uid, name: S.me.name, text, createdAt: FV.serverTimestamp()
-        });
-        if (!j.fbGiven) {
-          b.update(db.collection("users").doc(uid).collection("joined").doc(j.appId), { fbGiven: true });
-          b.update(db.collection("users").doc(uid), { points: FV.increment(P.feedback) });
-        }
         try {
+          const b = db.batch();
+          b.set(appRef(j.id).collection("feedback").doc(), { uid: S.user.uid, name: S.me.name, text, createdAt: FV.serverTimestamp() });
+          b.update(appRef(j.id), { feedbackCount: FV.increment(1) });
+          let ns;
+          if (!j.fbGiven) { b.update(userRef().collection("joined").doc(j.id), { fbGiven: true }); ns = await addStarsTo(b, ST.feedback); }
           await b.commit();
-          if (!j.fbGiven) { j.fbGiven = true; addPoints(P.feedback); }
+          if (!j.fbGiven) { j.fbGiven = true; gotStars(ns); }
           closeTop(); toast(t("feedbackOk"));
         } catch (e) { console.error(e); busy(ev.target, false); toast(t("errNet")); }
       };
     });
   }
-
-  function moreTesting(j) {
+  function moreTask(j) {
     sheet(`<h2>${esc(j.name)}</h2>
       <div class="btns" style="flex-direction:column">
         <button class="btn ghost" data-a="play">${esc(t("openPlay"))}</button>
-        ${j.mode !== "email" && j.groupLink ? `<button class="btn ghost" data-a="group">${esc(t("openGroup"))}</button>` : ""}
-        <button class="btn danger" data-a="leave">${esc(t("leave"))}</button>
+        <button class="btn red" data-a="leave">${esc(t("leave"))}</button>
       </div>`, el => el.addEventListener("click", async e => {
       const a = e.target.closest("[data-a]"); if (!a) return;
       if (a.dataset.a === "play") openUrl(playUrl(j.pkg));
-      else if (a.dataset.a === "group") openUrl(j.groupLink);
-      else if (await ask(t("leaveAsk"), t("leave"), true)) {
-        closeAll(); await leaveApp(j); renderTab();
-      }
+      else if (await ask(t("leaveAsk"), t("leave"), true)) { closeAll(); await leaveApp(j); S.openTask = null; renderTab(); }
     }));
   }
-
   async function leaveApp(j) {
-    const uid = S.user.uid;
-    const appRef = db.collection("apps").doc(j.appId);
-    let exists = false;
-    try { exists = (await appRef.get()).exists; } catch (e) {}
+    const uid = S.user.uid, ref = appRef(j.id);
+    try {
+      const dq = await testerRef(j.id, uid).collection("days").get();
+      if (!dq.empty) { const b1 = db.batch(); dq.forEach(d => b1.delete(d.ref)); await b1.commit(); }
+    } catch (e) {}
+    let exists = false; try { exists = !!(await testerRef(j.id, uid).get()).exists; } catch (e) {}
     const b = db.batch();
-    b.delete(db.collection("users").doc(uid).collection("joined").doc(j.appId));
-    if (exists) {
-      b.delete(appRef.collection("testers").doc(uid));
-      b.delete(appRef.collection("proofs").doc(uid));
-      b.update(appRef, { testersCount: FV.increment(-1) });
-    }
-    try { await b.commit(); delete S.joined[j.appId]; }
+    b.delete(userRef().collection("joined").doc(j.id));
+    if (exists) { b.delete(testerRef(j.id, uid)); b.update(ref, { testersCount: FV.increment(-1) }); }
+    try { await b.commit(); delete S.joined[j.id]; }
     catch (e) {
       console.error(e);
-      // nếu app/người test đã bị xóa, ít nhất xóa khỏi danh sách của mình
-      try { await db.collection("users").doc(uid).collection("joined").doc(j.appId).delete(); delete S.joined[j.appId]; }
-      catch (e2) { toast(t("errNet")); }
+      try { await userRef().collection("joined").doc(j.id).delete(); delete S.joined[j.id]; } catch (e2) { toast(t("errNet")); }
     }
   }
 
-  // ---------------------------------------------------------------- my apps
-  async function renderMine(m) {
-    spin(m);
-    try { await loadMine(true); } catch (e) { console.error(e); return failBox(m, () => renderMine(m)); }
-    if (S.tab !== "mine") return;
-    m.innerHTML = `
-      <button class="btn block" id="addapp" style="margin-bottom:14px">＋ ${esc(t("addApp"))}</button>
-      ${S.mine.length ? S.mine.map(a => {
-        const n = a.testersCount || 0;
-        return `<div class="card" data-mine="${esc(a.id)}">
-          <div class="row">${icon(a.name, a.pkg)}<div class="grow"><div class="title">${esc(a.name)}</div>
-            <div class="sub">${esc(a.pkg)}</div></div>
-            ${a.active === false ? `<span class="chip">${esc(t("doneTag"))}</span>` : ""}</div>
-          <div class="bar ${n >= 12 ? "" : "amber"}"><i style="width:${Math.min(100, n / 12 * 100)}%"></i></div>
-          <div class="barlabel"><span>${n}/12 ${esc(t("testers"))}</span><span>›</span></div>
-        </div>`;
-      }).join("") : `<div class="empty"><div class="big">📱</div><p>${esc(t("mineEmpty"))}</p></div>`}`;
-    $("#addapp").onclick = () => editApp(null);
-    m.querySelectorAll("[data-mine]").forEach(el => el.onclick = () => {
-      const a = S.mine.find(x => x.id === el.dataset.mine); if (a) manageApp(a);
-    });
-  }
-
-  function editApp(a) {
-    const isNew = !a;
-    a = a || { name: "", pkg: "", mode: "group", groupLink: "", desc: "" };
-    sheet(`<h2>${esc(isNew ? t("addApp") : t("editApp"))}</h2>
-      <label>${esc(t("appNameL"))}</label><input id="ename" type="text" maxlength="50" value="${esc(a.name)}">
-      <label>${esc(t("pkgL"))}</label><input id="epkg" type="text" maxlength="150" value="${esc(a.pkg)}" ${isNew ? "" : "disabled"} autocapitalize="off" spellcheck="false">
-      <div class="hint">${esc(t("pkgHint"))}</div>
-      <label>${esc(t("modeL"))}</label>
-      <div class="seg" id="emode"><button data-m="group">${esc(t("modeGroup"))}</button><button data-m="email">${esc(t("modeEmail"))}</button></div>
-      <div id="egroupbox"><label style="margin-top:0">${esc(t("groupL"))}</label>
-        <input id="egroup" type="url" value="${esc(a.groupLink)}" placeholder="https://groups.google.com/g/..." autocapitalize="off" spellcheck="false">
-        <div class="hint">${esc(t("groupHint"))}</div></div>
-      <div id="emailbox" class="hint">${esc(t("emailModeHint"))}</div>
-      <label>${esc(t("descL"))}</label><textarea id="edesc" maxlength="600" placeholder="${esc(t("descPh"))}">${esc(a.desc)}</textarea>
-      <div class="err" id="eerr"></div>
-      <div class="btns"><button class="btn ghost" id="ecancel">${esc(t("cancel"))}</button><button class="btn" id="esave">${esc(t("save"))}</button></div>`,
-      el => {
-        let mode = a.mode || "group";
-        const paint = () => {
-          el.querySelectorAll("[data-m]").forEach(b => b.classList.toggle("on", b.dataset.m === mode));
-          $("#egroupbox", el).classList.toggle("hidden", mode !== "group");
-          $("#emailbox", el).classList.toggle("hidden", mode !== "email");
-        };
-        el.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { mode = b.dataset.m; paint(); });
-        paint();
-        $("#ecancel", el).onclick = closeTop;
-        $("#esave", el).onclick = async ev => {
-          const err = $("#eerr", el);
-          const name = $("#ename", el).value.trim();
-          const pkg = $("#epkg", el).value.trim();
-          const groupLink = $("#egroup", el).value.trim();
-          const desc = $("#edesc", el).value.trim();
-          if (!name) { err.textContent = t("errAppName"); return; }
-          if (isNew && !isPkg(pkg)) { err.textContent = t("errPkg"); return; }
-          if (mode === "group" && !/^https:\/\/groups\.google\.com\//i.test(groupLink)) { err.textContent = t("errGroup"); return; }
-          err.textContent = ""; busy(ev.target, true);
-          try {
-            if (isNew) {
-              const mine = await loadMine(true);
-              if (mine.filter(x => x.active !== false).length >= 5) { err.textContent = t("maxApps"); busy(ev.target, false); return; }
-              const dup = await db.collection("apps").where("pkg", "==", pkg).limit(1).get();
-              if (!dup.empty) { err.textContent = t("errDupPkg"); busy(ev.target, false); return; }
-              await db.collection("apps").add({
-                ownerUid: S.user.uid, ownerName: S.me.name, name, pkg, mode,
-                groupLink: mode === "group" ? groupLink : "", desc, active: true, testersCount: 0,
-                createdAt: FV.serverTimestamp(), bumpedAt: FV.serverTimestamp()
-              });
-            } else {
-              await db.collection("apps").doc(a.id).update({
-                name, mode, groupLink: mode === "group" ? groupLink : "", desc
-              });
-            }
-            closeAll(); toast(t("saved"));
-            S.apps = null;
-            if (S.tab !== "mine") go("mine"); else renderTab();
-          } catch (e) { console.error(e); err.textContent = t("errNet"); busy(ev.target, false); }
-        };
-      });
-  }
-
-  async function manageApp(a) {
-    const ov = sheet(`<div class="spinner"></div>`);
-    const body = ov.firstElementChild;
-    let testers = [], fbs = [];
-    try {
-      const ref = db.collection("apps").doc(a.id);
-      const [ts, fs] = await Promise.all([ref.collection("testers").get(), ref.collection("feedback").get()]);
-      ts.forEach(d => testers.push(d.data()));
-      fs.forEach(d => fbs.push(Object.assign({ id: d.id }, d.data())));
-      testers.sort((x, y) => ms(x.joinedAt) - ms(y.joinedAt));
-      fbs.sort((x, y) => ms(y.createdAt) - ms(x.createdAt));
-    } catch (e) { console.error(e); body.innerHTML = `<div class="grab"></div><p class="empty">${esc(t("errNet"))}</p>`; return; }
-    const pts = S.me.points || 0;
-    body.innerHTML = `<div class="grab"></div>
-      <div class="row">${icon(a.name, a.pkg)}<div class="grow"><h2 style="margin:0">${esc(a.name)}</h2>
-        <div class="sub">${esc(a.pkg)} · ${testers.length}/12 ${esc(t("testers"))}</div></div></div>
-
-      <div class="card" style="margin-top:12px">
-        <button class="btn block amber" id="mbump" ${pts < P.bumpCost || a.active === false ? "disabled" : ""}>⚡ ${esc(t("bump", { p: P.bumpCost }))}</button>
-        <div class="hint" style="margin-top:8px">${esc(pts < P.bumpCost ? t("bumpNeed", { p: P.bumpCost }) : t("bumpInfo"))}</div>
-      </div>
-
-      <div class="section-h">${esc(t("testersList"))} (${testers.length})</div>
-      <div class="card">
-        ${testers.length ? testers.map(x => `<div class="person"><div class="avatar">${esc((x.name || "?")[0].toUpperCase())}</div>
-          <div class="grow"><div style="font-weight:600">${esc(x.name)}</div><div class="sub">${esc(x.email)}</div></div>
-          ${x.proof ? `<button class="btn small ghost" data-proof="${esc(x.uid)}">📷</button>` : `<span class="chip">${esc(t("noProof"))}</span>`}
-          <span class="chip ${x.lastDay === todayStr() ? "ok" : ""}">${Math.min(x.days || 0, 14)}/14</span></div>`).join("")
-          : `<p class="sub" style="white-space:normal;margin:0">${esc(t("noTesters"))}</p>`}
-        ${testers.length ? `<button class="btn block ghost" id="mcopy" style="margin-top:10px">${esc(t("copyEmails"))}</button>` : ""}
-      </div>
-
-      <div class="section-h">${esc(t("feedbacks"))} (${fbs.length})</div>
-      <div class="card">
-        ${fbs.length ? fbs.map(f => `<div class="fb"><div class="who">${esc(f.name)} <span class="when">· ${esc(ago(f.createdAt))}</span>
-          <button class="link muted" style="float:right;padding:0;font-size:12px" data-rep="${esc(f.id)}">${esc(t("report"))}</button></div>
-          <p>${esc(f.text)}</p></div>`).join("") : `<p class="sub" style="margin:0">${esc(t("noFeedback"))}</p>`}
-      </div>
-
-      <div class="btns">
-        <button class="btn ghost" id="mshare">${esc(t("share"))}</button>
-        <button class="btn ghost" id="medit">${esc(t("editApp"))}</button>
-      </div>
-      <div class="btns">
-        <button class="btn ghost" id="mtoggle">${esc(a.active === false ? t("reopen") : t("markDone"))}</button>
-        <button class="btn danger" id="mdel">${esc(t("del"))}</button>
-      </div>`;
-
-    $("#mbump", body).onclick = async ev => {
-      busy(ev.target, true);
-      const b = db.batch();
-      b.update(db.collection("apps").doc(a.id), { bumpedAt: FV.serverTimestamp() });
-      b.update(db.collection("users").doc(S.user.uid), { points: FV.increment(-P.bumpCost) });
-      try { await b.commit(); addPoints(-P.bumpCost); S.apps = null; closeAll(); toast(t("bumpOk")); }
-      catch (e) { console.error(e); busy(ev.target, false); toast(t("errNet")); }
-    };
-    const cp = $("#mcopy", body);
-    if (cp) cp.onclick = async () => {
-      const ok = await copyText(testers.map(x => x.email).filter(Boolean).join(", "));
-      toast(ok ? t("copied") : t("errNet"));
-    };
-    body.querySelectorAll("[data-proof]").forEach(b => b.onclick = async () => {
-      const ov2 = sheet(`<div class="spinner"></div>`);
-      try {
-        const d = await db.collection("apps").doc(a.id).collection("proofs").doc(b.dataset.proof).get();
-        const who = testers.find(x => x.uid === b.dataset.proof) || {};
-        ov2.firstElementChild.innerHTML = `<div class="grab"></div><h2>${esc(who.name || "")}</h2>
-          <div class="sub">${esc(who.email || "")}</div>
-          ${d.exists ? `<img class="proofimg" src="${esc(d.data().img)}" alt="">` : `<p>${esc(t("noProof"))}</p>`}
-          <button class="btn block ghost" style="margin-top:12px" onclick="this.closest('.overlay').click()">${esc(t("close"))}</button>`;
-      } catch (e) { closeTop(); toast(t("errNet")); }
-    });
-    body.querySelectorAll("[data-rep]").forEach(b => b.onclick = () => report({ type: "feedback", appId: a.id, fbId: b.dataset.rep }));
-    $("#mshare", body).onclick = () => {
-      const txt = t("shareText", { name: a.name }) + "\n" + optinUrl(a.pkg);
-      if (A) A.share(txt); else copyText(txt).then(() => toast(t("copied")));
-    };
-    $("#medit", body).onclick = () => { closeAll(); editApp(a); };
-    $("#mtoggle", body).onclick = async () => {
-      try {
-        await db.collection("apps").doc(a.id).update({ active: a.active === false });
-        closeAll(); S.apps = null; renderTab();
-      } catch (e) { toast(t("errNet")); }
-    };
-    $("#mdel", body).onclick = async () => {
-      if (!(await ask(t("delAsk"), t("del"), true))) return;
-      try { await deleteAppDeep(a.id); closeAll(); S.apps = null; renderTab(); }
-      catch (e) { console.error(e); toast(t("errNet")); }
-    };
-  }
-
-  async function deleteAppDeep(appId) {
-    const ref = db.collection("apps").doc(appId);
-    for (const sub of ["testers", "feedback", "proofs"]) {
-      const q = await ref.collection(sub).get();
-      const docs = []; q.forEach(d => docs.push(d.ref));
-      for (let i = 0; i < docs.length; i += 400) {
-        const b = db.batch(); docs.slice(i, i + 400).forEach(r => b.delete(r)); await b.commit();
-      }
-    }
-    await ref.delete();
-  }
-
-  // ---------------------------------------------------------------- me
-  function getReminder() {
-    try { return JSON.parse(localStorage.getItem("reminder") || "null") || { on: false, time: "20:00" }; }
-    catch (e) { return { on: false, time: "20:00" }; }
-  }
+  // ================================================================ TAB 4: Cá nhân
+  function getReminder() { return LS.get("reminder", { on: false, time: "20:00", set: false }); }
   function applyReminder(r) {
-    try { localStorage.setItem("reminder", JSON.stringify(r)); } catch (e) {}
-    const [h, mi] = r.time.split(":").map(Number);
+    LS.set("reminder", r);
+    const [h, mi] = (r.time || "20:00").split(":").map(Number);
     if (A && A.setReminder) A.setReminder(!!r.on, h || 20, mi || 0, t("reminderTitle"), t("reminderBody"));
   }
-
-  async function renderMe(m) {
-    const r = getReminder();
-    const nJoined = S.joined ? Object.keys(S.joined).length : 0;
-    const nMine = S.mine ? S.mine.length : 0;
-    m.innerHTML = `
-      <div class="card">
-        <div class="row"><div class="avatar" style="width:48px;height:48px;font-size:20px">${esc((S.me.name || "?")[0].toUpperCase())}</div>
-          <div class="grow"><div class="title">${esc(S.me.name)}</div><div class="sub">${esc(S.user.email)}</div>
-          <div class="sub" id="mestats">${esc(t("stats", { a: nJoined, b: nMine }))}</div></div></div>
-      </div>
-      <div class="section-h">${esc(t("profile"))}</div>
-      <div class="card">
-        <label style="margin-top:0">${esc(t("name"))}</label><input id="pname" type="text" maxlength="40" value="${esc(S.me.name)}">
-        <label>${esc(t("testerEmailL"))}</label><input id="pmail" type="email" value="${esc(S.me.testerEmail || "")}" placeholder="ban@gmail.com" autocapitalize="off">
-        <div class="hint">${esc(t("testerEmailHint"))}</div>
-        <div class="err" id="perr"></div>
-        <button class="btn block" id="psave">${esc(t("save"))}</button>
-      </div>
-      <div class="section-h">${esc(t("langL"))}</div>
-      <div class="seg"><button data-l="vi">Tiếng Việt</button><button data-l="en">English</button></div>
-      <div class="card">
-        <div class="switch"><span style="font-weight:600">${esc(t("reminderL"))}</span><input type="checkbox" id="rem" ${r.on ? "checked" : ""}></div>
-        <div class="switch"><span>${esc(t("reminderTime"))}</span><input type="time" id="remt" value="${esc(r.time)}" style="width:auto;padding:6px 10px;border:1px solid var(--line);border-radius:8px"></div>
-      </div>
-      <div class="card">
-        <button class="link" id="phow" style="display:block">📘 ${esc(t("howto"))}</button>
-        <button class="link" id="pabout" style="display:block">ℹ️ ${esc(t("about"))}</button>
-      </div>
-      <div class="btns"><button class="btn ghost" id="pout">${esc(t("logout"))}</button></div>
-      <div class="btns"><button class="btn danger" id="pdel">${esc(t("deleteAcc"))}</button></div>
-      <p class="sub" style="text-align:center;margin-top:16px">v${esc(A && A.appVersion ? A.appVersion() : "web")}</p>`;
-
-    m.querySelectorAll("[data-l]").forEach(b => {
-      b.classList.toggle("on", b.dataset.l === LANG);
-      b.onclick = async () => {
-        setLang(b.dataset.l);
-        try { await db.collection("users").doc(S.user.uid).update({ lang: LANG }); } catch (e) {}
-        applyReminder(getReminder());
-        renderShell();
+  function setupNotify() {
+    if (!(A && A.setNotify)) return;
+    A.setNotify(JSON.stringify({
+      uid: S.user.uid, apiKey: FIREBASE_CONFIG.apiKey, projectId: FIREBASE_CONFIG.projectId,
+      newApps: t("nfNewApps"), newTester: t("nfNewTester"), newFb: t("nfNewFb"), title: "12 Testers Free"
+    }));
+    const r = getReminder(); if (r.on) applyReminder(r);
+  }
+  function editProfile() {
+    sheet(`<h2>${esc(t("profile"))}</h2>
+      <label class="l" style="margin-top:0">${esc(t("name"))}</label><input id="pn" type="text" maxlength="40" value="${esc(S.me.name)}">
+      <label class="l">${esc(t("testerEmailL"))}</label><input id="pm" type="email" value="${esc(S.me.testerEmail || "")}" placeholder="you@gmail.com" autocapitalize="off">
+      <div class="hint">${esc(t("testerEmailHint"))}</div><div class="err" id="pe"></div>
+      <button class="btn block" id="ps">${esc(t("save"))}</button>`, el => {
+      $("#ps", el).onclick = async ev => {
+        const name = $("#pn", el).value.trim(), mail = $("#pm", el).value.trim().toLowerCase(), err = $("#pe", el);
+        if (!name) { err.textContent = t("errName"); return; }
+        if (!isGmail(mail)) { err.textContent = t("errGmail"); return; }
+        busy(ev.target, true);
+        try {
+          const b = db.batch();
+          b.update(userRef(), { name, testerEmail: mail });
+          (S.mine || []).forEach(a => b.update(appRef(a.id), { ownerName: name }));
+          await b.commit();
+          S.me.name = name; S.me.testerEmail = mail; closeTop(); toast(t("saved")); if (S.tab === "me") renderTab();
+        } catch (e) { err.textContent = t("errNet"); busy(ev.target, false); }
       };
     });
-    $("#psave").onclick = async ev => {
-      const name = $("#pname").value.trim(), mail = $("#pmail").value.trim().toLowerCase();
-      const err = $("#perr");
-      if (!name) { err.textContent = t("errName"); return; }
-      if (!isGmail(mail)) { err.textContent = t("errGmail"); return; }
-      err.textContent = ""; busy(ev.target, true);
-      try {
-        await db.collection("users").doc(S.user.uid).update({ name, testerEmail: mail });
-        S.me.name = name; S.me.testerEmail = mail; toast(t("saved"));
-      } catch (e) { err.textContent = t("errNet"); }
-      busy(ev.target, false);
-    };
-    const remChange = () => applyReminder({ on: $("#rem").checked, time: $("#remt").value || "20:00" });
-    $("#rem").onchange = remChange; $("#remt").onchange = remChange;
-    $("#phow").onclick = () => sheet(`<h2>${esc(t("howto"))}</h2><p style="white-space:pre-wrap">${esc(t("howtoBody"))}</p>
-      <button class="btn block ghost" onclick="this.closest('.overlay').click()">${esc(t("close"))}</button>`);
-    $("#pabout").onclick = () => sheet(`<h2>${esc(t("about"))}</h2><p style="white-space:pre-wrap">${esc(t("aboutBody"))}</p>
-      ${window.CONTACT_EMAIL ? `<p><a href="mailto:${esc(CONTACT_EMAIL)}">${esc(CONTACT_EMAIL)}</a></p>` : ""}`);
-    $("#pout").onclick = () => signOut();
-    $("#pdel").onclick = deleteAccount;
-
-    // cập nhật thống kê nếu chưa có
-    if (!S.joined || !S.mine) {
-      try {
-        await Promise.all([loadJoined(), loadMine()]);
-        const st = $("#mestats");
-        if (st) st.textContent = t("stats", { a: Object.keys(S.joined).length, b: S.mine.length });
-      } catch (e) {}
-    }
   }
-
+  function renderMe(m) {
+    const r = getReminder();
+    m.innerHTML = header(t("tabMe"), "", `<span class="starpill mystars">${starTxt(S.me.stars)}</span>`) + `
+      <div class="card"><div class="prow">
+        <div class="avatar">${esc((S.me.name || "?")[0].toUpperCase())}</div>
+        <div class="grow"><div class="title ell">${esc(S.me.name)}</div><div class="sub ell">${esc(S.me.testerEmail || S.user.email || "")}</div></div>
+        <button class="ibtn" id="medit">${IC.edit}</button></div></div>
+      <div class="card" style="padding:4px 14px">
+        <div class="mi"><div class="grow"><b>🌐 ${esc(t("langL"))}</b></div>
+          <select id="mlang"><option value="auto">${esc(t("langAuto"))}</option><option value="en">English</option></select></div>
+        <div class="mi" id="mrem"><div class="grow"><b>⏰ ${esc(t("reminderL"))}</b></div><div class="sw ${r.on ? "on" : ""}" id="msw"></div></div>
+        <div class="mi ${r.on ? "" : "hidden"}" id="mremt"><div class="grow"><b>${esc(t("reminderTime"))}</b></div><input type="time" id="mtime" value="${esc(r.time || "20:00")}"></div>
+      </div>
+      <div class="card" style="padding:4px 14px">
+        <div class="mi" data-m="post"><div class="grow"><b>📘 ${esc(t("guidePost"))}</b></div><span class="chev">${IC.chev}</span></div>
+        <div class="mi" data-m="test"><div class="grow"><b>🧪 ${esc(t("guideTest"))}</b></div><span class="chev">${IC.chev}</span></div>
+        <div class="mi" data-m="group"><div class="grow"><b>👥 ${esc(t("obMenu"))}</b></div><span class="chev">${IC.chev}</span></div>
+      </div>
+      <div class="card rate"><div class="mi" data-m="rate" style="border:0;padding:6px 0">
+        <div style="font-size:28px">⭐</div><div class="grow"><b>${esc(t("rateTitle"))}</b><span class="sub">${esc(t("rateBody"))}</span></div><span class="chev">${IC.chev}</span></div></div>
+      <div class="foot"><button class="link muted" id="mout">${esc(t("logout"))}</button><button class="link muted" id="mdel" style="color:var(--red)">${esc(t("deleteAcc"))}</button></div>
+      <p class="sub" style="text-align:center;margin-top:10px">v${esc(A && A.appVersion ? A.appVersion() : "web")}</p>`;
+    $("#medit").onclick = editProfile;
+    const sel = $("#mlang"); sel.value = langPref();
+    sel.onchange = async () => {
+      LS.set("langPref", sel.value); await applyLang();
+      try { await userRef().update({ lang: LANG }); } catch (e) {}
+      setupNotify(); renderShell();
+    };
+    $("#mrem").onclick = () => {
+      const cur = getReminder(); const nr = Object.assign({}, cur, { on: !cur.on, set: true });
+      applyReminder(nr); $("#msw").classList.toggle("on", nr.on); $("#mremt").classList.toggle("hidden", !nr.on);
+    };
+    $("#mtime").onchange = e => applyReminder(Object.assign({}, getReminder(), { time: e.target.value || "20:00", set: true }));
+    $$("[data-m]", m).forEach(el => el.onclick = () => {
+      const k = el.dataset.m;
+      if (k === "post") slideGuide(); else if (k === "test") guideSheet("test");
+      else if (k === "group") sheet(onboardHtml(true), bindOnboard);
+      else if (k === "rate") openUrl(A ? "market://details?id=" + OUR_PACKAGE : playUrl(OUR_PACKAGE));
+    });
+    $("#mout").onclick = () => signOut();
+    $("#mdel").onclick = deleteAccount;
+  }
   async function deleteAccount() {
     if (!(await ask(t("deleteAsk"), t("deleteAcc"), true))) return;
     const uid = S.user.uid;
     try {
-      // 1. bỏ test mọi app đang tham gia
       const joined = await loadJoined(true);
       for (const j of Object.values(joined)) {
         try {
-          const fq = await db.collection("apps").doc(j.appId).collection("feedback").where("uid", "==", uid).get();
-          const refs = []; fq.forEach(d => refs.push(d.ref));
-          for (const r of refs) await r.delete();
+          const fq = await appRef(j.id).collection("feedback").where("uid", "==", uid).get();
+          for (const d of fq.docs) await d.ref.delete();
         } catch (e) {}
         await leaveApp(j);
       }
-      // 2. xóa app mình đăng
       const mine = await loadMine(true);
       for (const a of mine) await deleteAppDeep(a.id);
-      // 3. xóa hồ sơ và tài khoản
-      await db.collection("users").doc(uid).delete();
-      applyReminder({ on: false, time: getReminder().time });
+      await userRef().delete();
+      applyReminder({ on: false, time: getReminder().time, set: true });
+      if (A && A.setNotify) A.setNotify("");
       await S.user.delete();
     } catch (e) {
       console.error(e);
-      if (String(e && e.code).includes("requires-recent-login")) {
-        toast(t("reauth")); await signOut();
-      } else toast(t("errNet"));
+      if (String(e && e.code).includes("requires-recent-login")) { toast(t("reauth")); await signOut(); }
+      else toast(t("errNet"));
     }
   }
+
+  // đồng hồ đếm ngược trong ngày
+  setInterval(() => { const v = untilMidnight(); $$(".timer").forEach(el => el.textContent = (el.textContent.startsWith("⏱") ? "⏱ " : "") + v); }, 30000);
 
   boot();
 })();

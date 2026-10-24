@@ -15,13 +15,20 @@ window.FIREBASE_CONFIG = {
 // Để trống "" thì app chỉ hiện đăng nhập bằng email.
 window.GOOGLE_WEB_CLIENT_ID = "140949714290-g4p17vg5ddvsosackciaalutk01rrbrm.apps.googleusercontent.com";
 
-// Số điểm (chỉ để ưu tiên hiển thị, KHÔNG bắt buộc để đăng app)
-window.POINTS = {
-  join: 10,       // tham gia test 1 app
-  checkin: 2,     // điểm danh mở app mỗi ngày
-  feedback: 5,    // góp ý lần đầu cho 1 app
-  bumpCost: 30    // đẩy app của mình lên đầu danh sách
+// Nhóm Google chung của cộng đồng: mỗi người vào nhóm 1 lần, mỗi chủ app thêm nhóm
+// này vào mục Người thử nghiệm trên Play Console 1 lần -> ai cũng test được app của nhau.
+window.COMMUNITY_GROUP = {
+  email: "12testersfree@googlegroups.com",
+  link: "https://groups.google.com/g/12testersfree"
 };
 
-// Email liên hệ hiện trong mục Giới thiệu (anh đổi nếu muốn)
-window.CONTACT_EMAIL = "";
+// Sao ⭐: thưởng cho người đi test. App của chủ nhiều sao được xếp lên trước ở Khám phá.
+window.STARS = {
+  join: 10,      // hoàn thành tham gia test 1 app
+  day: 2,        // nộp ảnh mỗi ngày
+  feedback: 5,   // góp ý lần đầu cho 1 app
+  finish: 20     // test đủ 14 ngày
+};
+
+// Package của chính app này (nút "Đánh giá trên Google Play")
+window.OUR_PACKAGE = "vn.tester12.free";

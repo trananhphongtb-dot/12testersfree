@@ -370,6 +370,25 @@ public class MainActivity extends Activity {
             }
         }
 
+        /** Bật/tắt kiểm tra ngầm (app mới, người test mới, góp ý mới). Chuỗi rỗng = tắt. */
+        @JavascriptInterface
+        public void setNotify(String cfgJson) {
+            NotifyWorker.configure(MainActivity.this, cfgJson);
+            if (cfgJson != null && !cfgJson.isEmpty() && Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                android.content.SharedPreferences sp = getSharedPreferences("ui", MODE_PRIVATE);
+                if (!sp.getBoolean("askedNotif", false)) {
+                    sp.edit().putBoolean("askedNotif", true).apply();
+                    runOnUiThread(() -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 8));
+                }
+            }
+        }
+
+        @JavascriptInterface
+        public void markSeen(String millis) {
+            try { NotifyWorker.markSeen(MainActivity.this, Long.parseLong(millis)); } catch (Exception ignored) { }
+        }
+
         @JavascriptInterface
         public String deviceLang() {
             return Locale.getDefault().getLanguage();

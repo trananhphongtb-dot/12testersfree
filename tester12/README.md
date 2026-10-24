@@ -1,4 +1,14 @@
-# 12 Testers Free — app test chéo miễn phí
+# 12 Testers Free — app test chéo miễn phí (bản 2.0)
+
+## Cập nhật lên bản 2.0 — làm 2 việc
+1. **Dán lại quy tắc Firestore**: mở file `firestore.rules`, chép toàn bộ → Firebase Console → Firestore Database → Rules → dán đè → **Publish**. (Bản 2 đổi quy tắc, không dán lại thì app báo lỗi mạng.)
+2. **Tải cả thư mục `tester12` lên GitHub** (Add file → Upload files → kéo thả nguyên thư mục `tester12`) → Commit → Actions tự dựng `app-release.apk` (cài thử) và `app-release.aab` (đăng Play, versionCode 2).
+
+Bản 2.0 có: nền đen · 4 tab (Trang chủ / Khám phá / Nhiệm vụ / Cá nhân) · nhóm chung 12testersfree@googlegroups.com · đăng app có icon, link Play tự lấy package · bấm thẻ app mở rộng tại chỗ, tải trên Play + nộp ảnh rồi Hoàn thành · nộp ảnh mỗi ngày 14 ngày, chủ app duyệt/từ chối · bảng "Bạn đã test / Họ test lại" · danh sách "Cần test lại" · sao ⭐ (app chủ nhiều sao xếp trước) · không giới hạn người test (15/12) · thông báo ngầm: app mới, người test mới, góp ý mới · tự theo ngôn ngữ máy (20 thứ tiếng) · icon mới.
+
+Lưu ý dữ liệu: ảnh nén nhỏ (≤ ~110 KB/ảnh, 1 ảnh/ngày) lưu thẳng trong Firestore và tự xóa sau 16 ngày, nên vẫn dùng gói Firebase miễn phí. Danh sách app được đọc công khai (để thông báo ngầm hoạt động) — chỉ chứa tên app, icon, package, tên chủ app, số sao; Gmail người test vẫn chỉ chủ app xem được.
+
+---
 
 App Android giúp nhà phát triển tìm đủ **12 người thử nghiệm trong 14 ngày** (yêu cầu của Google Play với tài khoản cá nhân mới) bằng cách test chéo cho nhau. Miễn phí hoàn toàn; điểm chỉ giúp app được đẩy lên đầu danh sách.
 
