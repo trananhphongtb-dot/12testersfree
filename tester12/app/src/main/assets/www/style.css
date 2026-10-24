@@ -265,3 +265,24 @@ textarea { min-height: 96px; resize: vertical; }
 [dir=rtl] .acard .meta .when { margin-left: 0; margin-right: auto; }
 [dir=rtl] .guide li { padding: 9px 38px 9px 0; }
 [dir=rtl] .guide li::before { left: auto; right: 0; }
+
+/* ---------- bản 2.1 ---------- */
+.tcar .tcard { flex: 0 0 84%; }
+.tcard .btns { margin-top: 10px; }
+.tcard.flat { margin-bottom: 10px; }
+.thumbw { position: relative; margin-left: auto; flex: none; }
+.thumbw .thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; display: block; margin: 0; }
+.thx { position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--red);
+  color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.stepbtn .sub svg { width: 20px; height: 20px; color: var(--muted); }
+.choose { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.choice { border: 1px solid var(--line); background: var(--card2); color: var(--ink); border-radius: 14px; padding: 14px 10px; cursor: pointer; text-align: left; }
+.choice b { display: block; font-size: 15px; }
+.choice small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.35; }
+.choice.swp { border-color: rgba(59,130,246,.5); background: var(--blue-soft); }
+.okbox.wait { border-color: var(--line); background: var(--card2); color: var(--ink); }
+.okbox.wait small { color: var(--muted); }
+
+.logo b { font-size: 40px; margin-top: -4px; }
+.logo small { font-size: 15px; font-weight: 900; letter-spacing: 0; margin-top: 3px; }
+.logo i { font-style: normal; font-size: 9px; font-weight: 900; letter-spacing: .2em; margin-top: 2px; padding-left: .2em; }

@@ -215,7 +215,7 @@
 
   // ================================================================ state
   const S = { user: null, me: null, tab: "home", apps: null, appsAt: 0, joined: null, mine: null, mineT: {},
-    tdocs: {}, open: null, openTask: null, openMine: null, q: "" };
+    tdocs: {}, open: null, openTask: null, openMine: null, q: "", swaps: null };
   let auth, db, FV;
   let pendingName = "", skipOnboard = false;
 
@@ -260,7 +260,7 @@
     FV = firebase.firestore.FieldValue;
     auth.onAuthStateChanged(async u => {
       closeAll();
-      Object.assign(S, { user: u, me: null, apps: null, joined: null, mine: null, mineT: {}, tdocs: {}, tab: "home", open: null, openTask: null, openMine: null, q: "" });
+      Object.assign(S, { user: u, me: null, apps: null, joined: null, mine: null, mineT: {}, tdocs: {}, tab: "home", open: null, openTask: null, openMine: null, q: "", swaps: null });
       skipOnboard = false;
       if (!u) { renderAuth("login"); return; }
       root.innerHTML = `<div class="spinner"></div>`;
@@ -309,7 +309,7 @@
   }
 
   // ================================================================ auth screen
-  function logoHtml() { return `<div class="logo"><b>12</b><small>TESTERS FREE</small></div>`; }
+  function logoHtml() { return `<div class="logo"><b>12</b><small>TESTERS</small><i>FREE</i></div>`; }
   function googleReady() {
     return !!(A && A.googleSignIn && window.GOOGLE_WEB_CLIENT_ID && /\.apps\.googleusercontent\.com$/.test(GOOGLE_WEB_CLIENT_ID));
   }
@@ -403,6 +403,8 @@
           <div class="grow"><div class="title" style="font-size:16px">${esc(t("ob2Title"))}</div>
           <div class="sub">${esc(t("ob2Body"))}</div></div></div>
         ${copyRowHtml()}
+        <div class="btns"><button class="btn ghost" data-ob="console">${IC.ext} ${esc(t("goConsole"))}</button>
+          <button class="btn" data-ob="guide">${IC.help} ${esc(t("guideBtn"))}</button></div>
         <div class="hint">${esc(t("ob2Skip"))}</div>
       </div>
       ${inSheet ? `<button class="btn block ghost" data-ob="close">${esc(t("close"))}</button>` : `
@@ -414,6 +416,8 @@
     $$("[data-ob]", el).forEach(b => b.onclick = () => {
       const k = b.dataset.ob;
       if (k === "join") openUrl(CG.link);
+      else if (k === "console") openUrl(CONSOLE_URL);
+      else if (k === "guide") slideGuide();
       else if (k === "close") closeTop();
       else if (k === "done") { setOnboarded(); renderShell(); }
       else if (k === "later") { skipOnboard = true; renderShell(); }
@@ -512,24 +516,33 @@
   // ================================================================ TAB 1: Trang chủ (app của tôi)
   async function renderHome(m) {
     if (!S.mine) spin(m);
-    try { await Promise.all([loadMine(true), loadApps(), loadJoined()]); await loadMineTesters(); } catch (e) { console.error(e); return failBox(m, () => renderHome(m)); }
+    try {
+      await Promise.all([loadMine(true), loadApps(), loadJoined(), loadSwaps()]);
+      await loadMineTesters();
+    } catch (e) { console.error(e); return failBox(m, () => renderHome(m)); }
     if (S.tab !== "home") return;
     const right = `<span class="starpill mystars">${starTxt(S.me.stars)}</span>`;
+    const todo = buildTodo();
+    const todoHtml = todo.length ? `<div class="sec" style="margin-top:4px"><h2>${esc(t("todoTitle"))}</h2><span>${todo.length}</span></div>
+      <div class="carousel tcar">${todo.map(x => todoCardHtml(x, true)).join("")}</div>` : "";
     if (!S.mine.length) {
-      m.innerHTML = header(t("homeTitle"), t("homeSub"), right) + `
-        <div class="card" style="text-align:center;padding:30px 18px">
+      m.innerHTML = header(t("homeTitle"), t("homeSub"), right) + todoHtml + `
+        <div class="card" style="text-align:center;padding:30px 18px;margin-top:12px">
           <div style="font-size:46px">🚀</div>
           <div class="title" style="margin:6px 0 4px">${esc(t("noAppTitle"))}</div>
           <p class="sub" style="margin:0 0 18px">${esc(t("noAppBody"))}</p>
           <button class="btn block" id="addbig" style="font-size:17px;padding:16px">＋ ${esc(t("addApp"))}</button>
         </div>`;
       $("#addbig").onclick = () => addAppPage(null);
+      bindTodo(m);
       return;
     }
-    m.innerHTML = header(t("homeTitle"), t("homeSub"), right) +
+    m.innerHTML = header(t("homeTitle"), t("homeSub"), right) + todoHtml +
+      `<div class="sec"><h2>${esc(t("myApps"))}</h2><span>${S.mine.length}</span></div>` +
       `<button class="btn block" id="addapp" style="margin-bottom:14px">＋ ${esc(t("addApp"))}</button>` +
       S.mine.map(a => mineCard(a)).join("");
     $("#addapp").onclick = () => addAppPage(null);
+    bindTodo(m);
     $$("[data-mine]", m).forEach(el => el.addEventListener("click", e => {
       if (e.target.closest("[data-stop]")) return;
       const id = el.dataset.mine;
@@ -596,10 +609,10 @@
         if (A) A.share(txt); else copyText(txt).then(() => toast(t("copied")));
       } else if (k === "edit") addAppPage(a);
       else if (k === "toggle") {
-        try { await appRef(a.id).update({ active: a.active === false }); S.apps = null; renderTab(); } catch (e) { toast(t("errNet")); }
+        try { await appRef(a.id).update({ active: a.active === false }); S.apps = null; renderTab(); } catch (e) { toast(failMsg(e)); }
       } else if (k === "del") {
         if (!(await ask(t("delAsk"), t("del"), true))) return;
-        try { await deleteAppDeep(a.id); S.openMine = null; S.apps = null; S.mine = null; renderTab(); } catch (e) { console.error(e); toast(t("errNet")); }
+        try { await deleteAppDeep(a.id); S.openMine = null; S.apps = null; S.mine = null; renderTab(); } catch (e) { toast(failMsg(e)); }
       }
     });
     $$("[data-goback]", el).forEach(b => b.onclick = () => go("explore", { open: b.dataset.goback }));
@@ -627,7 +640,7 @@
           x.rev = Object.assign({}, x.rev, { [d]: v });
           b.closest("[data-day]").remove();
           toast(v === "a" ? t("approved") : t("rejected"));
-        } catch (e) { console.error(e); busy(b, false); toast(t("errNet")); }
+        } catch (e) { busy(b, false); toast(failMsg(e)); }
       });
     }
     // góp ý
@@ -759,7 +772,7 @@
           closeAll(); toast(t("saved"));
           S.apps = null; S.mine = null; S.openMine = null;
           if (S.tab !== "home") go("home"); else renderTab();
-        } catch (e) { console.error(e); err.textContent = t("errNet"); busy(ev.target, false); }
+        } catch (e) { err.textContent = failMsg(e); busy(ev.target, false); }
       };
     });
   }
@@ -846,6 +859,126 @@
     });
   }
 
+  // ================================================================ lỗi ghi dữ liệu: báo đúng nguyên nhân
+  function failMsg(e) {
+    const c = String((e && e.code) || "");
+    console.error(e);
+    if (c.includes("permission-denied")) return t("errPerm");
+    if (c.includes("not-found")) return t("goneHint");
+    if (c.includes("unavailable") || c.includes("deadline") || (typeof navigator !== "undefined" && navigator.onLine === false)) return t("errNet");
+    if (c.includes("invalid-argument") || c.includes("resource-exhausted")) return t("errTooBig");
+    return t("errSave") + (c ? " (" + c.replace("firestore/", "") + ")" : "");
+  }
+
+  // ================================================================ yêu cầu test chéo
+  const swapsCol = () => db.collection("swaps");
+  async function loadSwaps() {
+    const uid = S.user.uid;
+    const [a, b] = await Promise.all([swapsCol().where("toUid", "==", uid).get(), swapsCol().where("fromUid", "==", uid).get()]);
+    const list = [];
+    a.forEach(d => list.push(Object.assign({ id: d.id, dir: "in" }, d.data())));
+    b.forEach(d => list.push(Object.assign({ id: d.id, dir: "out" }, d.data())));
+    S.swaps = list.filter(s => s.status === "pending" || s.status === "accepted");
+    return S.swaps;
+  }
+  // app mà mình phải test trong 1 yêu cầu test chéo
+  const swapTarget = s => s.dir === "in" ? { id: s.fromAppId, name: s.fromAppName, icon: s.fromIcon, who: s.fromName }
+                                          : { id: s.toAppId, name: s.toAppName, icon: s.toIcon, who: s.toName };
+  function swapFor(appId) { return (S.swaps || []).find(s => swapTarget(s).id === appId); }
+  function swapAccepted(appId) { const s = swapFor(appId); return s && s.status === "accepted"; }
+
+  // Danh sách việc cần làm (trang chủ + nhiệm vụ)
+  function buildTodo() {
+    const out = [], joined = S.joined || {}, seen = new Set();
+    (S.swaps || []).forEach(s => {
+      const tg = swapTarget(s);
+      if (s.dir === "in" && s.status === "pending") out.push({ kind: "req", s, tg });
+      else if (s.status === "accepted" && !joined[tg.id]) { out.push({ kind: "start", s, tg }); seen.add(tg.id); }
+      else if (s.dir === "out" && s.status === "pending") { out.push({ kind: "wait", s, tg }); seen.add(tg.id); }
+    });
+    const backers = new Set(); Object.values(S.mineT || {}).forEach(arr => arr.forEach(x => backers.add(x.uid)));
+    (S.apps || []).filter(a => backers.has(a.ownerUid) && a.active !== false && !joined[a.id] && !seen.has(a.id))
+      .forEach(a => out.push({ kind: "back", a, tg: { id: a.id, name: a.name, icon: a.icon, who: a.ownerName } }));
+    const order = { req: 0, start: 1, back: 2, wait: 3 };
+    return out.sort((x, y) => order[x.kind] - order[y.kind]);
+  }
+  function todoCardHtml(x, wide) {
+    const ic = iconHtml({ icon: x.tg.icon, name: x.tg.name, pkg: x.tg.id }, "s");
+    let title = "", sub = "", btns = "";
+    if (x.kind === "req") {
+      title = t("tdReqTitle", { name: x.s.fromName });
+      sub = t("tdReqSub", { mine: x.s.toAppName, theirs: x.s.fromAppName });
+      btns = `<button class="btn small ghost" data-td="decline" data-id="${esc(x.s.id)}">${esc(t("decline"))}</button>
+              <button class="btn small green" data-td="accept" data-id="${esc(x.s.id)}">${esc(t("accept"))}</button>`;
+    } else if (x.kind === "start") {
+      title = t("tdStartTitle", { name: x.tg.who });
+      sub = t("tdStartSub", { app: x.tg.name });
+      btns = `<button class="btn small" data-td="open" data-app="${esc(x.tg.id)}">${esc(t("startTest"))}</button>`;
+    } else if (x.kind === "back") {
+      title = t("tdBackTitle", { name: x.tg.who });
+      sub = t("tdBackSub", { app: x.tg.name });
+      btns = `<button class="btn small amber" data-td="open" data-app="${esc(x.tg.id)}">↩ ${esc(t("testBack"))}</button>`;
+    } else {
+      title = t("tdWaitTitle", { name: x.tg.who });
+      sub = t("tdWaitSub", { app: x.tg.name });
+      btns = `<button class="btn small ghost" data-td="cancel" data-id="${esc(x.s.id)}">${esc(t("cancelReq"))}</button>`;
+    }
+    const tag = { req: `<span class="tag b">${esc(t("tgReq"))}</span>`, start: `<span class="tag g">${esc(t("tgSwap"))}</span>`,
+      back: `<span class="tag a">${esc(t("tgBack"))}</span>`, wait: `<span class="tag m">${esc(t("tgWait"))}</span>` }[x.kind];
+    return `<div class="acard tcard ${wide ? "" : "flat"}"><div class="top" style="align-items:flex-start">${ic}
+      <div class="grow"><div class="head"><div class="name ell" style="font-size:15px">${esc(title)}</div></div>
+      <div class="sub" style="margin-top:2px">${esc(sub)}</div><div style="margin-top:6px">${tag}</div></div></div>
+      <div class="btns" style="margin-top:10px">${btns}</div></div>`;
+  }
+  function bindTodo(m) {
+    $$("[data-td]", m).forEach(b => b.onclick = async ev => {
+      ev.stopPropagation();
+      const k = b.dataset.td;
+      if (k === "open") { go("explore", { open: b.dataset.app }); return; }
+      busy(b, true);
+      try {
+        if (k === "accept") { await swapsCol().doc(b.dataset.id).update({ status: "accepted", answeredAt: FV.serverTimestamp() }); toast(t("swapAccepted")); }
+        else if (k === "decline") { await swapsCol().doc(b.dataset.id).update({ status: "declined", answeredAt: FV.serverTimestamp() }); toast(t("swapDeclined")); }
+        else if (k === "cancel") { await swapsCol().doc(b.dataset.id).update({ status: "cancelled" }); toast(t("swapCancelled")); }
+        renderTab();
+      } catch (e) { busy(b, false); toast(failMsg(e)); }
+    });
+  }
+  function swapSheet(a) {
+    const mine = (S.mine || []).filter(x => x.active !== false);
+    if (!mine.length) {
+      sheet(`<h2>${esc(t("swapTitle"))}</h2><p class="sub">${esc(t("swapNeedApp"))}</p>
+        <div class="btns"><button class="btn ghost" data-a="x">${esc(t("close"))}</button><button class="btn" data-a="add">＋ ${esc(t("addApp"))}</button></div>`,
+        el => el.addEventListener("click", e => { const k = e.target.closest("[data-a]"); if (!k) return; closeTop(); if (k.dataset.a === "add") addAppPage(null); }));
+      return;
+    }
+    let pick = mine[0].id;
+    sheet(`<h2>${esc(t("swapTitle"))}</h2>
+      <p class="sub" style="margin:0 0 10px">${esc(t("swapIntro", { name: a.ownerName || "", app: a.name }))}</p>
+      <div class="sub" style="font-weight:700;color:var(--ink);margin-bottom:6px">${esc(t("swapPick"))}</div>
+      <div id="swl">${mine.map(x => `<button class="stepbtn" data-pick="${esc(x.id)}">${iconHtml(x, "s")}<span class="grow">${esc(x.name)}</span><span class="n">✓</span></button>`).join("")}</div>
+      <input id="swmsg" type="text" maxlength="200" placeholder="${esc(t("swapMsgPh"))}" style="margin-top:10px">
+      <div class="btns"><button class="btn ghost" data-a="x">${esc(t("cancel"))}</button><button class="btn" id="swgo">${esc(t("swapSend"))}</button></div>`, el => {
+      const paint = () => $$("[data-pick]", el).forEach(b => { const on = b.dataset.pick === pick; b.classList.toggle("ok", on); $(".n", b).style.visibility = on ? "visible" : "hidden"; });
+      $$("[data-pick]", el).forEach(b => b.onclick = () => { pick = b.dataset.pick; paint(); });
+      paint();
+      $("[data-a=x]", el).onclick = closeTop;
+      $("#swgo", el).onclick = async ev => {
+        const my = mine.find(x => x.id === pick);
+        busy(ev.target, true);
+        try {
+          await swapsCol().add({
+            fromUid: S.user.uid, fromName: S.me.name, fromAppId: my.id, fromAppName: my.name, fromIcon: my.icon || "",
+            toUid: a.ownerUid, toName: a.ownerName || "", toAppId: a.id, toAppName: a.name, toIcon: a.icon || "",
+            msg: ($("#swmsg", el).value || "").trim().slice(0, 200), status: "pending", createdAt: FV.serverTimestamp()
+          });
+          closeTop(); toast(t("swapSent", { name: a.ownerName || "" }));
+          await loadSwaps(); paintList();
+        } catch (e) { busy(ev.target, false); toast(failMsg(e)); }
+      };
+    });
+  }
+
   // ================================================================ TAB 2: Khám phá
   function sortApps(list) {
     const me = S.user.uid;
@@ -860,7 +993,7 @@
   async function renderExplore(m, opts) {
     if (opts && opts.open) { S.open = opts.open; S.q = ""; }
     if (!S.apps) spin(m);
-    try { await Promise.all([loadApps(), loadJoined(), S.mine ? null : loadMine()]); }
+    try { await Promise.all([loadApps(), loadJoined(), S.mine ? null : loadMine(), S.swaps ? null : loadSwaps()]); await loadTaskDocs(); }
     catch (e) { console.error(e); return failBox(m, () => renderExplore(m)); }
     if (S.tab !== "explore") return;
     const visible = S.apps.filter(a => a.active !== false);
@@ -909,15 +1042,17 @@
     }
   }
   function backedMe(a) {
-    // chủ app này đang test app của mình?
     return Object.values(S.mineT || {}).some(arr => arr.some(x => x.uid === a.ownerUid));
   }
   function appCard(a, mini) {
     const n = a.testersCount || 0, target = a.target || 12;
     const mine = a.ownerUid === S.user.uid, joined = S.joined && S.joined[a.id];
+    const sw = swapFor(a.id);
     const open = !mini && S.open === a.id;
     const tag = mine ? `<span class="tag m">${esc(t("yours"))}</span>`
       : joined ? `<span class="tag g">${esc(t("testing"))}</span>`
+      : sw && sw.status === "accepted" ? `<span class="tag g">${esc(t("tgSwap"))}</span>`
+      : sw ? `<span class="tag m">${esc(t("tgWait"))}</span>`
       : backedMe(a) ? `<span class="tag a">${esc(t("testedYou"))}</span>` : "";
     return `<div class="acard ${open ? "open" : ""}" data-app="${esc(a.id)}">
       <div class="top">${iconHtml(a)}
@@ -930,32 +1065,56 @@
       ${open ? `<div class="xp" data-stop>${expandedHtml(a)}</div>` : ""}
     </div>`;
   }
-  const joinState = {}; // appId -> {play, img}
+
+  // Ô ảnh chụp màn hình gọn: ảnh nhỏ + nút xóa
+  function shotStepHtml(n, img, key) {
+    return `<div class="stepbtn ${img ? "ok" : ""}" data-x="${key}"><span class="n">${img ? "✓" : n}</span><span class="grow">${esc(t("stepShot"))}</span>
+      ${img ? `<span class="thumbw"><img class="thumb" src="${img}" alt=""><button class="thx" data-x="${key}-del" title="">✕</button></span>` : `<span class="sub">${IC.cam}</span>`}</div>`;
+  }
+
+  const joinState = {}; // appId -> {mode, play, img}
   function expandedHtml(a) {
     const n = a.testersCount || 0, target = a.target || 12;
     const mine = a.ownerUid === S.user.uid, joined = S.joined && S.joined[a.id];
-    const st = joinState[a.id] || (joinState[a.id] = { play: false, img: null });
+    const st = joinState[a.id] || (joinState[a.id] = { mode: null, play: false, img: null });
+    const sw = swapFor(a.id);
+    if (sw && sw.status === "accepted" && !st.mode) st.mode = "swap";
     const top = `<div class="row" style="margin-bottom:10px">
-        <div class="grow"><div class="bar ${n >= target ? "full" : ""}"><i style="width:${Math.min(100, n / target * 100)}%"></i></div></div>
+        <div class="grow"><div class="bar ${n >= target ? "full" : ""}"><i style="width:${Math.max(3, Math.min(100, n / target * 100))}%"></i></div></div>
         <div class="iconbtns"><button class="ibtn" data-x="share">${IC.share}</button>${mine ? "" : `<button class="ibtn r" data-x="report">${IC.flag}</button>`}</div></div>
       ${a.instr || a.desc ? `<div class="instr">${IC.info}<div>${esc(a.instr || a.desc)}</div></div>` : ""}`;
     if (mine) return top + `<button class="btn block ghost" style="margin-top:12px" data-x="home">${esc(t("yourApp"))}</button>`;
-    if (joined) return top + `<button class="btn block done" style="margin-top:12px" data-x="tasks">✓ ${esc(t("goTask"))}</button>`;
+    if (joined) return top + dailyPanelHtml(S.joined[a.id], "x");
+    if (sw && sw.status === "pending" && sw.dir === "out")
+      return top + `<div class="okbox wait" style="margin-top:12px">⏳<div>${esc(t("tdWaitTitle", { name: a.ownerName || "" }))}<small>${esc(t("swapWaitHint"))}</small></div></div>
+        <button class="btn block ghost" style="margin-top:8px" data-x="cancel" data-id="${esc(sw.id)}">${esc(t("cancelReq"))}</button>`;
+    if (!st.mode) return top + `
+      <div class="choose">
+        <button class="choice" data-x="solo"><b>🙋 ${esc(t("soloTitle"))}</b><small>${esc(t("soloSub"))}</small></button>
+        <button class="choice swp" data-x="swap"><b>🔁 ${esc(t("swapTitle"))}</b><small>${esc(t("swapSub"))}</small></button>
+      </div>`;
     return top + `
+      ${st.mode === "swap" ? `<div class="hint" style="margin-top:10px">🔁 ${esc(t("swapOkHint", { name: a.ownerName || "" }))}</div>` : ""}
       <button class="stepbtn ${st.play ? "ok" : ""}" data-x="play"><span class="n">${st.play ? "✓" : "1"}</span><span class="grow">${esc(t("stepPlay"))}</span></button>
-      <button class="stepbtn ${st.img ? "ok" : ""}" data-x="shot"><span class="n">${st.img ? "✓" : "2"}</span><span class="grow">${esc(t("stepShot"))}</span>${st.img ? `<img class="thumb" src="${st.img}" alt="">` : ""}</button>
-      <button class="btn block green" style="margin-top:12px" data-x="done" ${st.play && st.img ? "" : "disabled"}>${esc(t("finishJoin", { p: ST.join }))}</button>`;
+      ${shotStepHtml(2, st.img, "shot")}
+      <button class="btn block green" style="margin-top:12px" data-x="done" ${st.play && st.img ? "" : "disabled"}>${esc(t("finishJoin", { p: ST.join }))}</button>
+      ${st.mode === "solo" ? `<button class="link muted" data-x="back" style="display:block;margin:6px auto 0">${esc(t("back"))}</button>` : ""}`;
   }
   function bindExpanded(el, a) {
+    if (S.joined && S.joined[a.id]) { bindDaily(el, S.joined[a.id], () => paintList()); }
     $$("[data-x]", el).forEach(b => b.onclick = async ev => {
       ev.stopPropagation();
       const k = b.dataset.x, st = joinState[a.id];
       if (k === "share") { const txt = t("shareText", { name: a.name }) + "\n" + optinUrl(a.pkg); if (A) A.share(txt); else copyText(txt).then(() => toast(t("copied"))); }
       else if (k === "report") report({ type: "app", appId: a.id });
       else if (k === "home") go("home");
-      else if (k === "tasks") { S.openTask = a.id; go("tasks"); }
+      else if (k === "solo") { st.mode = "solo"; paintList(); }
+      else if (k === "swap") swapSheet(a);
+      else if (k === "back") { st.mode = null; paintList(); }
+      else if (k === "cancel") { try { await swapsCol().doc(b.dataset.id).update({ status: "cancelled" }); await loadSwaps(); paintList(); } catch (e) { toast(failMsg(e)); } }
       else if (k === "play") { openUrl(optinUrl(a.pkg)); st.play = true; setTimeout(() => paintList(), 400); }
       else if (k === "shot") { const d = await pickImage(); if (!d) { toast(t("imgBad")); return; } st.img = d; paintList(); }
+      else if (k === "shot-del") { st.img = null; paintList(); }
       else if (k === "done") doJoin(a, b);
     });
   }
@@ -971,35 +1130,91 @@
       b.set(testerRef(a.id, uid).collection("days").doc(day), { img: st.img, note: "", at: FV.serverTimestamp() });
       b.set(userRef().collection("joined").doc(a.id), {
         appId: a.id, name: a.name, pkg: a.pkg, icon: a.icon || "", ownerUid: a.ownerUid, ownerName: a.ownerName || "",
-        joinedAt: FV.serverTimestamp(), joinDay: day, fbGiven: false, bonus: false
+        joinedAt: FV.serverTimestamp(), joinDay: day, fbGiven: false, bonus: false, mode: st.mode || "solo"
       });
       b.update(appRef(a.id), { testersCount: FV.increment(1) });
       const ns = await addStarsTo(b, ST.join);
       await b.commit();
       gotStars(ns);
       a.testersCount = (a.testersCount || 0) + 1;
-      S.joined[a.id] = { id: a.id, appId: a.id, name: a.name, pkg: a.pkg, icon: a.icon, ownerUid: a.ownerUid, ownerName: a.ownerName, joinDay: day, fbGiven: false };
+      S.joined[a.id] = { id: a.id, appId: a.id, name: a.name, pkg: a.pkg, icon: a.icon, ownerUid: a.ownerUid, ownerName: a.ownerName, joinDay: day, fbGiven: false, mode: st.mode };
       S.tdocs[a.id] = { joinDay: day, sub: { [day]: true }, rev: {} };
       delete joinState[a.id];
-      // lần đầu tham gia: bật sẵn nhắc giờ test
       const r = getReminder(); if (!r.set) applyReminder({ on: true, time: r.time || "20:00", set: true });
       toast(t("joinedOk"));
       paintList();
-    } catch (e) { console.error(e); busy(btn, false); toast(t("errNet")); }
+    } catch (e) { busy(btn, false); toast(failMsg(e)); }
   }
 
   function report(info) {
     ask(t("reportAsk"), t("report"), true).then(async ok => {
       if (!ok) return;
       try { await db.collection("reports").add(Object.assign({ by: S.user.uid, createdAt: FV.serverTimestamp() }, info)); toast(t("reportOk")); }
-      catch (e) { toast(t("errNet")); }
+      catch (e) { toast(failMsg(e)); }
     });
   }
 
+  // ================================================================ Bảng việc hằng ngày (dùng ở Khám phá và Nhiệm vụ)
+  const daily = {}; // appId -> {open, img}
+  function dailyPanelHtml(j, pfx) {
+    const info = dayInfo(S.tdocs[j.id]);
+    const d = daily[j.id] || (daily[j.id] = { open: false, img: null });
+    const pair = pairInfo(j);
+    const app = (S.apps || []).find(a => a.id === j.id) || {};
+    return `
+      <div class="row" style="margin-top:12px"><b class="grow">${esc(info.finished ? t("days14") : t("dayOf", { d: info.cur }))}</b>
+        ${info.finished ? "" : `<span class="timer">⏱ ${esc(untilMidnight())}</span>`}</div>
+      ${daysStrip(info)}
+      <div class="duo"><div class="y"><b>${info.done}/14</b><small>${esc(t("youTested"))}</small></div>
+        <div class="t"><b>${pair ? pair.done + "/14" : "–"}</b><small>${esc(t("theyTested"))}</small></div></div>
+      ${info.finished ? "" : info.todayDone
+        ? `<div class="okbox" style="margin-top:12px">${IC.check}<div>${esc(t("todaySent"))}<small>${esc(t("comeBack"))}</small></div></div>`
+        : `<div class="sub" style="margin-top:12px;font-weight:700;color:var(--ink)">${esc(t("todayJobs"))}</div>
+          <button class="stepbtn ${d.open ? "ok" : ""}" data-d="open"><span class="n">${d.open ? "✓" : "1"}</span><span class="grow">${esc(t("openTheApp"))}</span></button>
+          <div class="stepbtn ${d.img ? "ok" : ""}" data-d="shot"><span class="n">${d.img ? "✓" : "2"}</span><span class="grow">${esc(t("sendShot"))}</span>
+            ${d.img ? `<span class="thumbw"><img class="thumb" src="${d.img}" alt=""><button class="thx" data-d="del">✕</button></span>` : `<span class="sub">${IC.cam}</span>`}</div>
+          <input type="text" class="dnote" maxlength="200" placeholder="${esc(t("notePh"))}" style="margin-top:8px">
+          <button class="btn block green" style="margin-top:10px" data-d="submit" ${d.open && d.img ? "" : "disabled"}>${esc(t("submitDay", { p: ST.day }))}</button>`}
+      <div class="btns"><button class="btn ghost small" data-d="fb">💬 ${esc(t("feedback"))}</button>
+        <button class="btn ghost small" data-d="play">${esc(t("openPlay"))}</button>
+        <button class="btn ghost small" data-d="more" style="flex:0 0 46px">⋯</button></div>`;
+  }
+  function bindDaily(el, j, repaint) {
+    $$("[data-d]", el).forEach(b => b.onclick = async ev => {
+      ev.stopPropagation();
+      const k = b.dataset.d, d = daily[j.id];
+      if (k === "open") { if (A) A.openApp(j.pkg); else openUrl(playUrl(j.pkg)); d.open = true; setTimeout(repaint, 300); }
+      else if (k === "shot") { if (ev.target.closest("[data-d=del]")) return; const im = await pickImage(); if (!im) { toast(t("imgBad")); return; } d.img = im; repaint(); }
+      else if (k === "del") { d.img = null; repaint(); }
+      else if (k === "submit") submitDay(j, b, ($(".dnote", el) || {}).value || "", repaint);
+      else if (k === "play") openUrl(optinUrl(j.pkg));
+      else if (k === "fb") feedbackSheet(j);
+      else if (k === "more") moreTask(j);
+    });
+  }
+  async function submitDay(j, btn, note, repaint) {
+    const day = today(), d = daily[j.id]; if (!d || !d.img) return;
+    busy(btn, true);
+    try {
+      const b = db.batch();
+      b.set(testerRef(j.id, S.user.uid).collection("days").doc(day), { img: d.img, note: String(note).trim().slice(0, 200), at: FV.serverTimestamp() });
+      b.update(testerRef(j.id, S.user.uid), { ["sub." + day]: true });
+      const ns = await addStarsTo(b, ST.day);
+      await b.commit();
+      gotStars(ns);
+      S.tdocs[j.id].sub = Object.assign({}, S.tdocs[j.id].sub, { [day]: true });
+      daily[j.id] = { open: false, img: null };
+      toast(t("daySent", { p: ST.day }));
+      repaint();
+      cleanupOld(j);
+    } catch (e) { busy(btn, false); toast(failMsg(e)); }
+  }
+
   // ================================================================ TAB 3: Nhiệm vụ
-  async function loadTaskDocs() {
-    const ids = Object.keys(S.joined);
+  async function loadTaskDocs(force) {
+    const ids = Object.keys(S.joined || {});
     await Promise.all(ids.map(async id => {
+      if (!force && S.tdocs[id]) return;
       try { const s = await testerRef(id, S.user.uid).get(); S.tdocs[id] = s.exists ? s.data() : null; }
       catch (e) { S.tdocs[id] = null; }
     }));
@@ -1007,47 +1222,44 @@
   async function renderTasks(m) {
     if (!S.joined) spin(m);
     try {
-      await Promise.all([loadJoined(true), loadApps(), S.mine ? null : loadMine()]);
-      await Promise.all([loadTaskDocs(), loadMineTesters()]);
+      await Promise.all([loadJoined(true), loadApps(), S.mine ? null : loadMine(), loadSwaps()]);
+      await Promise.all([loadTaskDocs(true), loadMineTesters()]);
     } catch (e) { console.error(e); return failBox(m, () => renderTasks(m)); }
     if (S.tab !== "tasks") return;
-    const all = Object.values(S.joined);
-    const active = [], done = [], gone = [];
-    all.forEach(j => {
+    const todoT = [], doneT = [], finished = [], gone = [];
+    Object.values(S.joined).forEach(j => {
       const td = S.tdocs[j.id];
       if (!td) { gone.push(j); return; }
-      (dayInfo(td).finished ? done : active).push(j);
+      const i = dayInfo(td);
+      (i.finished ? finished : i.todayDone ? doneT : todoT).push(j);
     });
-    active.sort((x, y) => dayInfo(S.tdocs[x.id]).todayDone - dayInfo(S.tdocs[y.id]).todayDone);
-    // cần test lại: người đã test app của mình nhưng mình chưa test app của họ
-    const backers = new Set(); Object.values(S.mineT).forEach(arr => arr.forEach(x => backers.add(x.uid)));
-    const backList = (S.apps || []).filter(a => backers.has(a.ownerUid) && a.active !== false && !S.joined[a.id]);
-    const dot = $("#taskdot"); if (dot) dot.classList.toggle("hidden", !active.some(j => !dayInfo(S.tdocs[j.id]).todayDone));
+    const extra = buildTodo().filter(x => x.kind !== "wait");
+    const waits = buildTodo().filter(x => x.kind === "wait");
+    const nTodo = todoT.length + extra.length;
+    const dot = $("#taskdot"); if (dot) dot.classList.toggle("hidden", !nTodo);
 
     m.innerHTML = header(t("tasksTitle"), t("tasksSub"), `<span class="starpill mystars">${starTxt(S.me.stars)}</span>`) +
-      (backList.length ? `<div class="sec"><h2>↩ ${esc(t("needBack"))}</h2><span>${backList.length}</span></div>` +
-        backList.map(a => `<div class="acard" data-goapp="${esc(a.id)}"><div class="top">${iconHtml(a, "s")}<div class="grow">
-          <div class="name ell" style="font-size:15.5px">${esc(a.name)}</div><div class="sub ell">${esc(t("backHint", { name: a.ownerName || "" }))}</div></div>
-          <button class="btn small amber">${esc(t("testBack"))}</button></div></div>`).join("") : "") +
-      `<div class="sec"><h2>${esc(t("activeTests"))}</h2><span>${active.length}</span></div>` +
-      (active.length ? active.map(j => taskCard(j)).join("")
-        : `<div class="empty"><div class="big">🧪</div><p>${esc(t("tasksEmpty"))}</p><button class="btn" id="goex">${esc(t("tabExplore"))}</button></div>`) +
-      (done.length ? `<div class="sec"><h2>✅ ${esc(t("doneTests"))}</h2><span>${done.length}</span></div>` + done.map(j => taskCard(j, true)).join("") : "") +
-      (gone.length ? `<div class="sec"><h2>${esc(t("goneTests"))}</h2></div>` + gone.map(j => `<div class="acard"><div class="top">${iconHtml(j, "s")}<div class="grow"><div class="name ell" style="font-size:15px">${esc(j.name)}</div><div class="sub">${esc(t("goneHint"))}</div></div><button class="btn small ghost" data-rm="${esc(j.id)}">${esc(t("remove"))}</button></div></div>`).join("") : "");
+      `<div class="sec"><h2>🔔 ${esc(t("todoNow"))}</h2><span>${nTodo}</span></div>` +
+      (nTodo ? extra.map(x => todoCardHtml(x, false)).join("") + todoT.map(j => taskCard(j)).join("")
+        : `<div class="card empty" style="padding:18px">✅ ${esc(t("allDone"))}</div>`) +
+      (doneT.length ? `<div class="sec"><h2>✓ ${esc(t("doneToday"))}</h2><span>${doneT.length}</span></div>` + doneT.map(j => taskCard(j)).join("") : "") +
+      (waits.length ? `<div class="sec"><h2>⏳ ${esc(t("waiting"))}</h2><span>${waits.length}</span></div>` + waits.map(x => todoCardHtml(x, false)).join("") : "") +
+      (finished.length ? `<div class="sec"><h2>🏁 ${esc(t("doneTests"))}</h2><span>${finished.length}</span></div>` + finished.map(j => taskCard(j, true)).join("") : "") +
+      (gone.length ? `<div class="sec"><h2>${esc(t("goneTests"))}</h2></div>` + gone.map(j => `<div class="acard"><div class="top">${iconHtml(j, "s")}<div class="grow"><div class="name ell" style="font-size:15px">${esc(j.name)}</div><div class="sub">${esc(t("goneHint"))}</div></div><button class="btn small ghost" data-rm="${esc(j.id)}">${esc(t("remove"))}</button></div></div>`).join("") : "") +
+      (!Object.keys(S.joined).length && !extra.length ? `<div class="empty"><div class="big">🧪</div><p>${esc(t("tasksEmpty"))}</p><button class="btn" id="goex">${esc(t("tabExplore"))}</button></div>` : "");
     const ge = $("#goex"); if (ge) ge.onclick = () => go("explore");
-    $$("[data-goapp]", m).forEach(el => el.onclick = () => go("explore", { open: el.dataset.goapp }));
-    $$("[data-rm]", m).forEach(b => b.onclick = async () => { try { await userRef().collection("joined").doc(b.dataset.rm).delete(); renderTasks(m); } catch (e) { toast(t("errNet")); } });
+    bindTodo(m);
+    $$("[data-rm]", m).forEach(b => b.onclick = async () => { try { await userRef().collection("joined").doc(b.dataset.rm).delete(); renderTasks(m); } catch (e) { toast(failMsg(e)); } });
     $$("[data-task]", m).forEach(el => el.addEventListener("click", e => {
       if (e.target.closest("[data-stop]")) return;
       S.openTask = S.openTask === el.dataset.task ? null : el.dataset.task; renderTasks(m);
     }));
-    if (S.openTask) { const el = $(`[data-task="${S.openTask}"]`, m); if (el && S.joined[S.openTask]) bindTask(el, S.joined[S.openTask]); }
-    claimBonuses(done);
+    if (S.openTask) { const el = $(`[data-task="${S.openTask}"]`, m); if (el && S.joined[S.openTask]) bindDaily(el, S.joined[S.openTask], () => renderTasks($("#main"))); }
+    claimBonuses(finished);
   }
   function pairInfo(j) {
-    // chủ app j có đang test app của mình không? -> số ngày họ đã test
     let best = null;
-    Object.values(S.mineT).forEach(arr => arr.forEach(x => { if (x.uid === j.ownerUid) { const i = dayInfo(x); if (!best || i.done > best.done) best = i; } }));
+    Object.values(S.mineT || {}).forEach(arr => arr.forEach(x => { if (x.uid === j.ownerUid) { const i = dayInfo(x); if (!best || i.done > best.done) best = i; } }));
     return best;
   }
   function taskCard(j, finished) {
@@ -1060,61 +1272,8 @@
           <div class="cnt">${esc(finished ? t("days14") : t("dayOf", { d: info.cur }))}${finished ? "" : ` · <span class="timer">${esc(untilMidnight())}</span>`}</div>
           ${daysStrip(info)}
         </div></div>
-      ${open ? `<div class="xp" data-stop>${taskExpandedHtml(j, info, finished)}</div>` : ""}
+      ${open ? `<div class="xp" data-stop>${dailyPanelHtml(j, "t")}</div>` : ""}
     </div>`;
-  }
-  const taskShot = {}; // appId -> dataURL
-  function taskExpandedHtml(j, info, finished) {
-    const pair = pairInfo(j);
-    const app = (S.apps || []).find(a => a.id === j.id) || {};
-    return `
-      <div class="duo"><div class="y"><b>${info.done}/14</b><small>${esc(t("youTested"))}</small></div>
-        <div class="t"><b>${pair ? pair.done + "/14" : "–"}</b><small>${esc(t("theyTested"))}</small></div></div>
-      ${pair ? "" : `<div class="hint">${esc(t("noPair", { name: j.ownerName || "" }))}</div>`}
-      ${legend()}
-      ${app.instr ? `<div class="instr" style="margin-top:10px">${IC.info}<div>${esc(app.instr)}</div></div>` : ""}
-      ${finished ? "" : info.todayDone ? `<div class="okbox" style="margin-top:12px">${IC.check}<div>${esc(t("todaySent"))}<small>${esc(t("comeBack"))}</small></div></div>` : `
-        <div class="today"><b>${esc(t("dayX", { d: info.cur }))}</b><span class="tag b">${esc(t("todayLbl"))}</span><span class="timer">⏱ ${esc(untilMidnight())}</span></div>
-        <button class="stepbtn" data-t="open"><span class="n">1</span><span class="grow">${esc(t("openTheApp"))}</span></button>
-        <div class="drop" data-t="shot">${taskShot[j.id] ? `<img src="${taskShot[j.id]}" alt="">` : `${IC.cam}<div>${esc(t("uploadShot"))}</div><div class="sub" style="font-weight:500">${esc(t("oneShot"))}</div>`}</div>
-        <input type="text" id="tnote" maxlength="200" placeholder="${esc(t("notePh"))}" style="margin-top:10px">
-        <button class="btn block green" style="margin-top:10px" data-t="submit" ${taskShot[j.id] ? "" : "disabled"}>${esc(t("submitDay", { p: ST.day }))}</button>`}
-      <div class="btns"><button class="btn ghost small" data-t="fb">💬 ${esc(t("feedback"))}</button>
-        <button class="btn ghost small" data-t="play">${esc(t("openPlay"))}</button>
-        <button class="btn ghost small" data-t="more" style="flex:0 0 46px">⋯</button></div>`;
-  }
-  function bindTask(el, j) {
-    $$("[data-t]", el).forEach(b => b.onclick = async ev => {
-      ev.stopPropagation();
-      const k = b.dataset.t;
-      if (k === "open") { if (A) A.openApp(j.pkg); else openUrl(playUrl(j.pkg)); }
-      else if (k === "play") openUrl(optinUrl(j.pkg));
-      else if (k === "shot") { const d = await pickImage(); if (!d) { toast(t("imgBad")); return; } taskShot[j.id] = d; renderTasks($("#main")); }
-      else if (k === "submit") submitDay(j, b);
-      else if (k === "fb") feedbackSheet(j);
-      else if (k === "more") moreTask(j);
-    });
-  }
-  async function submitDay(j, btn) {
-    const day = today(), img = taskShot[j.id]; if (!img) return;
-    const note = (($("#tnote") || {}).value || "").trim().slice(0, 200);
-    busy(btn, true);
-    try {
-      const b = db.batch();
-      b.set(testerRef(j.id, S.user.uid).collection("days").doc(day), { img, note, at: FV.serverTimestamp() });
-      b.update(testerRef(j.id, S.user.uid), { ["sub." + day]: true });
-      const ns = await addStarsTo(b, ST.day);
-      await b.commit();
-      gotStars(ns);
-      S.tdocs[j.id].sub = Object.assign({}, S.tdocs[j.id].sub, { [day]: true });
-      delete taskShot[j.id];
-      toast(t("daySent", { p: ST.day }));
-      renderTasks($("#main"));
-      cleanupOld(j);
-    } catch (e) {
-      console.error(e); busy(btn, false);
-      toast(String(e && e.code).includes("not-found") ? t("goneHint") : t("errNet"));
-    }
   }
   // xóa ảnh cũ hơn 16 ngày để tiết kiệm dung lượng
   async function cleanupOld(j) {
@@ -1156,7 +1315,7 @@
           await b.commit();
           if (!j.fbGiven) { j.fbGiven = true; gotStars(ns); }
           closeTop(); toast(t("feedbackOk"));
-        } catch (e) { console.error(e); busy(ev.target, false); toast(t("errNet")); }
+        } catch (e) { busy(ev.target, false); toast(failMsg(e)); }
       };
     });
   }
@@ -1184,7 +1343,7 @@
     try { await b.commit(); delete S.joined[j.id]; }
     catch (e) {
       console.error(e);
-      try { await userRef().collection("joined").doc(j.id).delete(); delete S.joined[j.id]; } catch (e2) { toast(t("errNet")); }
+      try { await userRef().collection("joined").doc(j.id).delete(); delete S.joined[j.id]; } catch (e2) { toast(failMsg(e2)); }
     }
   }
 
@@ -1220,7 +1379,7 @@
           (S.mine || []).forEach(a => b.update(appRef(a.id), { ownerName: name }));
           await b.commit();
           S.me.name = name; S.me.testerEmail = mail; closeTop(); toast(t("saved")); if (S.tab === "me") renderTab();
-        } catch (e) { err.textContent = t("errNet"); busy(ev.target, false); }
+        } catch (e) { err.textContent = failMsg(e); busy(ev.target, false); }
       };
     });
   }
@@ -1288,7 +1447,7 @@
     } catch (e) {
       console.error(e);
       if (String(e && e.code).includes("requires-recent-login")) { toast(t("reauth")); await signOut(); }
-      else toast(t("errNet"));
+      else toast(failMsg(e));
     }
   }
 

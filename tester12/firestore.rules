@@ -98,7 +98,6 @@ service cloud.firestore {
           allow create, update: if signedIn() && me() == uid
             && request.resource.data.img is string
             && request.resource.data.img.size() < 160000
-            && request.resource.data.img.matches('^data:image/jpeg;base64,.*')
             && str(request.resource.data.note, 200);
           allow delete: if signedIn() && (me() == uid || appOwner() == me());
         }
@@ -111,6 +110,22 @@ service cloud.firestore {
           && existsAfter(/databases/$(database)/documents/apps/$(appId)/testers/$(me()));
         allow delete: if signedIn() && (resource.data.uid == me() || appOwner() == me());
       }
+    }
+
+    // ---------- yêu cầu test chéo (A xin test chéo với B, B đồng ý mới bắt đầu) ----------
+    match /swaps/{id} {
+      allow read: if signedIn() && (resource.data.fromUid == me() || resource.data.toUid == me());
+      allow create: if signedIn() && request.resource.data.fromUid == me()
+        && request.resource.data.toUid != me()
+        && request.resource.data.status == 'pending'
+        && str(request.resource.data.msg, 200);
+      allow update: if signedIn() && (
+          (resource.data.toUid == me() && changed().hasOnly(['status', 'answeredAt'])
+            && request.resource.data.status in ['accepted', 'declined'])
+          ||
+          (resource.data.fromUid == me() && changed().hasOnly(['status'])
+            && request.resource.data.status == 'cancelled'));
+      allow delete: if signedIn() && (resource.data.fromUid == me() || resource.data.toUid == me());
     }
 
     // ---------- báo cáo vi phạm (chỉ anh xem trong Firebase Console) ----------

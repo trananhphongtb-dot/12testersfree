@@ -1,6 +1,21 @@
 window.I18N = window.I18N || {};
 
 I18N.vi = {
+  errPerm: "Máy chủ từ chối lưu. Kiểm tra đã dán quy tắc Firestore mới chưa.", errTooBig: "Ảnh quá lớn, hãy chọn ảnh khác.", errSave: "Không lưu được",
+  todoTitle: "Việc cần làm", myApps: "App của tôi", todoNow: "Chưa làm", allDone: "Hôm nay đã xong hết việc!", doneToday: "Đã làm hôm nay", waiting: "Đang chờ đồng ý",
+  tdReqTitle: "{name} muốn test chéo", tdReqSub: "Họ test \"{mine}\" của bạn, bạn test \"{theirs}\"",
+  tdStartTitle: "Test chéo với {name}", tdStartSub: "Đã đồng ý — bắt đầu test \"{app}\"",
+  tdBackTitle: "{name} đã test app của bạn", tdBackSub: "Test lại \"{app}\" để cảm ơn",
+  tdWaitTitle: "Chờ {name} đồng ý", tdWaitSub: "Yêu cầu test chéo \"{app}\"",
+  accept: "Đồng ý", decline: "Từ chối", startTest: "Bắt đầu test", cancelReq: "Hủy yêu cầu",
+  tgReq: "Yêu cầu", tgSwap: "Test chéo", tgBack: "Test lại", tgWait: "Đang chờ",
+  swapAccepted: "Đã đồng ý. Hai bên bắt đầu test app của nhau nhé!", swapDeclined: "Đã từ chối yêu cầu.", swapCancelled: "Đã hủy yêu cầu.",
+  soloTitle: "Test 1 mình", soloSub: "Giúp người khác, không cần họ test lại",
+  swapTitle: "Test chéo", swapSub: "Gửi yêu cầu, chủ app đồng ý thì 2 bên test cho nhau",
+  swapNeedApp: "Bạn cần đăng app của mình trước để test chéo.", swapIntro: "Bạn test \"{app}\" của {name}, {name} test lại app của bạn. Chỉ bắt đầu sau khi {name} đồng ý.",
+  swapPick: "Chọn app của bạn để họ test:", swapMsgPh: "Lời nhắn (không bắt buộc)", swapSend: "Gửi yêu cầu", swapSent: "Đã gửi yêu cầu cho {name}.",
+  swapWaitHint: "Khi chủ app đồng ý, việc test sẽ hiện ở Trang chủ và Nhiệm vụ.", swapOkHint: "{name} đã đồng ý test chéo. Làm 2 bước dưới để bắt đầu.",
+  todayJobs: "Việc hôm nay", sendShot: "Gửi ảnh chụp màn hình",
   joinedGroupBtn: "Tôi đã tham gia nhóm", step1Hint: "Bấm mở nhóm, chọn \"Tham gia nhóm\", rồi quay lại bấm xác nhận.",
   goConsole: "Đến Console", guideBtn: "Hướng dẫn", errGroupStep: "Hãy hoàn thành bước 1: tham gia nhóm Google.",
   slTitle: "Thêm Google Group vào người thử nghiệm", slStep: "Bước {a}/{b}", back: "Quay lại", next: "Tiếp", doneBtn: "Xong",
@@ -120,6 +135,21 @@ I18N.vi = {
 };
 
 I18N.en = {
+  errPerm: "The server refused to save. Check that the new Firestore rules are published.", errTooBig: "Image too large, pick another one.", errSave: "Couldn't save",
+  todoTitle: "To do", myApps: "My apps", todoNow: "To do", allDone: "All done for today!", doneToday: "Done today", waiting: "Waiting for approval",
+  tdReqTitle: "{name} wants to swap tests", tdReqSub: "They test your \"{mine}\", you test \"{theirs}\"",
+  tdStartTitle: "Test swap with {name}", tdStartSub: "Accepted — start testing \"{app}\"",
+  tdBackTitle: "{name} tested your app", tdBackSub: "Test \"{app}\" back to say thanks",
+  tdWaitTitle: "Waiting for {name}", tdWaitSub: "Swap request for \"{app}\"",
+  accept: "Accept", decline: "Decline", startTest: "Start testing", cancelReq: "Cancel request",
+  tgReq: "Request", tgSwap: "Swap", tgBack: "Test back", tgWait: "Waiting",
+  swapAccepted: "Accepted. You both can start testing each other's app!", swapDeclined: "Request declined.", swapCancelled: "Request cancelled.",
+  soloTitle: "Test solo", soloSub: "Help others, no test back needed",
+  swapTitle: "Test swap", swapSub: "Send a request; once accepted you test each other",
+  swapNeedApp: "Post your own app first to swap tests.", swapIntro: "You test {name}'s \"{app}\" and {name} tests your app back. Starts only after {name} accepts.",
+  swapPick: "Pick your app for them to test:", swapMsgPh: "Message (optional)", swapSend: "Send request", swapSent: "Request sent to {name}.",
+  swapWaitHint: "Once the owner accepts, the task appears on Home and Tasks.", swapOkHint: "{name} accepted the swap. Do the 2 steps below to start.",
+  todayJobs: "Today's tasks", sendShot: "Send a screenshot",
   joinedGroupBtn: "I've joined the group", step1Hint: "Open the group, tap \"Join group\", then come back and confirm.",
   goConsole: "Go to Console", guideBtn: "Guide", errGroupStep: "Please complete step 1: join the Google Group.",
   slTitle: "Add the Google Group as testers", slStep: "Step {a} of {b}", back: "Back", next: "Next", doneBtn: "Done",
