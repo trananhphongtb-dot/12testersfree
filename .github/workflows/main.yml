@@ -18,9 +18,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Nâng cấp lên v4 để tránh lỗi "Failed to find package 'tools'"
       - name: Cài đặt Android SDK
         uses: android-actions/setup-android@v4
+        with:
+          # Chỉ định rõ chỉ cài platform-tools, tránh cài gói tools đã lỗi thời
+          packages: 'platform-tools'
 
       - name: Cài đặt Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -52,23 +54,19 @@ jobs:
       - name: Dựng APK Release và AAB
         working-directory: ./tester12
         env:
+          KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # Cấp quyền thực thi cho gradlew
           chmod +x gradlew
-          # Chạy build
           ./gradlew --no-daemon assembleRelease bundleRelease
 
       - name: Gom file APK và AAB vào chung thư mục 12testersfree
         run: |
           mkdir -p 12testersfree
-          # Tìm và copy file APK Release
           find ./tester12 -name "*.apk" -path "*/release/*" -exec cp {} 12testersfree/ \;
-          # Tìm và copy file AAB
           find ./tester12 -name "*.aab" -exec cp {} 12testersfree/ \;
-          
           echo "--- Danh sách file đã gom ---"
           ls -la 12testersfree/
 
