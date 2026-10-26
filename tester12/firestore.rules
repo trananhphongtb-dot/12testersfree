@@ -1,0 +1,136 @@
+rules_version = '2';
+// Quy tắc bảo mật cho 12 Testers Free (bản 2).
+// Dán toàn bộ vào Firebase Console > Firestore Database > Rules > Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function str(v, maxLen) { return v is string && v.size() <= maxLen; }
+    function myStarsAfter() { return getAfter(/databases/$(database)/documents/users/$(me())).data.stars; }
+
+    // ---------- hồ sơ người dùng (riêng tư) ----------
+    match /users/{uid} {
+      allow read: if signedIn() && me() == uid;
+      allow create: if signedIn() && me() == uid
+        && request.resource.data.stars == 0
+        && str(request.resource.data.name, 40);
+      // Sao chỉ được cộng theo các mức trong app (+2, +5, +10, +20).
+      allow update: if signedIn() && me() == uid
+        && changed().hasOnly(['name', 'testerEmail', 'stars', 'lang'])
+        && str(request.resource.data.name, 40)
+        && (!('stars' in changed()) || (request.resource.data.stars - resource.data.get('stars', 0)) in [2, 5, 10, 20]);
+      allow delete: if signedIn() && me() == uid;
+
+      match /joined/{appId} {
+        allow read, write: if signedIn() && me() == uid;
+      }
+    }
+
+    // ---------- app cần test (đọc công khai để thông báo ngầm hoạt động) ----------
+    match /apps/{appId} {
+      function isOwner() { return signedIn() && resource.data.ownerUid == me(); }
+      function testerPath() { return /databases/$(database)/documents/apps/$(appId)/testers/$(me()); }
+      function validApp(d) {
+        // dùng get(...) để app đăng từ bản cũ (thiếu trường) vẫn sửa được
+        return str(d.name, 50) && d.name.size() > 0
+          && str(d.get('instr', ''), 600)
+          && d.get('icon', '') is string && d.get('icon', '').size() < 90000
+          && d.get('target', 12) is int && d.get('target', 12) >= 12 && d.get('target', 12) <= 100;
+      }
+
+      allow read: if true;
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == me()
+        && request.resource.data.testersCount == 0
+        && request.resource.data.feedbackCount == 0
+        && str(request.resource.data.pkg, 150)
+        && str(request.resource.data.name, 30)
+        && str(request.resource.data.instr, 250)
+        && validApp(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if
+        // chủ app: sửa thông tin, ẩn/hiện, đồng bộ tên + số sao (không tự sửa số người test)
+        (isOwner()
+          && changed().hasOnly(['name', 'instr', 'icon', 'target', 'active', 'ownerName', 'ownerStars'])
+          && validApp(request.resource.data)
+          && (!('ownerStars' in changed()) || request.resource.data.ownerStars == myStarsAfter()))
+        ||
+        // người khác: +1 khi tham gia, −1 khi rời (kèm tạo/xóa bản ghi người test)
+        (signedIn() && resource.data.ownerUid != me()
+          && changed().hasOnly(['testersCount'])
+          && ((request.resource.data.testersCount == resource.data.testersCount + 1
+                 && !exists(testerPath()) && existsAfter(testerPath()))
+              || (request.resource.data.testersCount == resource.data.testersCount - 1
+                 && exists(testerPath()) && !existsAfter(testerPath()))))
+        ||
+        // người test gửi góp ý: +1 feedbackCount
+        (signedIn() && resource.data.ownerUid != me()
+          && changed().hasOnly(['feedbackCount'])
+          && request.resource.data.feedbackCount == resource.data.get('feedbackCount', 0) + 1
+          && exists(testerPath()));
+
+      allow delete: if isOwner();
+
+      function appOwner() { return get(/databases/$(database)/documents/apps/$(appId)).data.ownerUid; }
+
+      match /testers/{uid} {
+        allow read: if signedIn() && (me() == uid || appOwner() == me());
+        allow create: if signedIn() && me() == uid && appOwner() != me()
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'joinedAt', 'joinDay', 'sub', 'rev'])
+          && request.resource.data.sub.size() == 1
+          && request.resource.data.rev.size() == 0;
+        // người test: chỉ được thêm ngày đã nộp (sub). Chủ app: chỉ được duyệt (rev).
+        allow update: if signedIn() && (
+            (me() == uid && changed().hasOnly(['sub', 'name', 'email'])
+              && request.resource.data.sub.diff(resource.data.sub).changedKeys().size() == 0
+              && request.resource.data.sub.diff(resource.data.sub).removedKeys().size() == 0)
+            ||
+            (appOwner() == me() && changed().hasOnly(['rev'])));
+        allow delete: if signedIn() && (me() == uid || appOwner() == me());
+
+        // ảnh chụp màn hình từng ngày
+        match /days/{day} {
+          allow read: if signedIn() && (me() == uid || appOwner() == me());
+          allow create, update: if signedIn() && me() == uid
+            && request.resource.data.img is string
+            && request.resource.data.img.size() < 160000
+            && str(request.resource.data.note, 200);
+          allow delete: if signedIn() && (me() == uid || appOwner() == me());
+        }
+      }
+
+      match /feedback/{fid} {
+        allow read: if signedIn() && (resource.data.uid == me() || appOwner() == me());
+        allow create: if signedIn() && request.resource.data.uid == me()
+          && str(request.resource.data.text, 1000)
+          && existsAfter(/databases/$(database)/documents/apps/$(appId)/testers/$(me()));
+        allow delete: if signedIn() && (resource.data.uid == me() || appOwner() == me());
+      }
+    }
+
+    // ---------- yêu cầu test chéo (A xin test chéo với B, B đồng ý mới bắt đầu) ----------
+    match /swaps/{id} {
+      allow read: if signedIn() && (resource.data.fromUid == me() || resource.data.toUid == me());
+      allow create: if signedIn() && request.resource.data.fromUid == me()
+        && request.resource.data.toUid != me()
+        && request.resource.data.status == 'pending'
+        && str(request.resource.data.msg, 200);
+      allow update: if signedIn() && (
+          (resource.data.toUid == me() && changed().hasOnly(['status', 'answeredAt'])
+            && request.resource.data.status in ['accepted', 'declined'])
+          ||
+          (resource.data.fromUid == me() && changed().hasOnly(['status'])
+            && request.resource.data.status == 'cancelled'));
+      allow delete: if signedIn() && (resource.data.fromUid == me() || resource.data.toUid == me());
+    }
+
+    // ---------- báo cáo vi phạm (chỉ anh xem trong Firebase Console) ----------
+    match /reports/{id} {
+      allow create: if signedIn() && request.resource.data.by == me();
+    }
+  }
+}
