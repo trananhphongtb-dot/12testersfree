@@ -18,8 +18,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Nâng cấp lên v4 để tránh lỗi "Failed to find package 'tools'"
       - name: Cài đặt Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Cài đặt Gradle
         uses: gradle/actions/setup-gradle@v4
