@@ -11,8 +11,8 @@ android {
         applicationId 'vn.tester12.free'
         minSdk 26
         targetSdk 36
-        versionCode 4
-        versionName '2.2.0'
+        versionCode 3
+        versionName '2.1.0'
     }
 
     signingConfigs {
@@ -56,6 +56,4 @@ dependencies {
     implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
     // Kiểm tra ngầm để báo app mới / người test mới
     implementation 'androidx.work:work-runtime:2.9.1'
-    // Đọc chữ trong ảnh chụp màn hình (chạy trên máy, không cần mạng)
-    implementation 'com.google.mlkit:text-recognition:16.0.1'
 }

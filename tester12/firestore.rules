@@ -1,5 +1,5 @@
 rules_version = '2';
-// Quy tắc bảo mật cho 12 Testers Free (bản 2.2).
+// Quy tắc bảo mật cho 12 Testers Free (bản 2).
 // Dán toàn bộ vào Firebase Console > Firestore Database > Rules > Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -55,10 +55,8 @@ service cloud.firestore {
       allow update: if
         // chủ app: sửa thông tin, ẩn/hiện, đồng bộ tên + số sao (không tự sửa số người test)
         (isOwner()
-          && changed().hasOnly(['name', 'instr', 'icon', 'target', 'active', 'ownerName', 'ownerStars', 'issues', 'swapCount'])
+          && changed().hasOnly(['name', 'instr', 'icon', 'target', 'active', 'ownerName', 'ownerStars'])
           && validApp(request.resource.data)
-          && (!('issues' in changed()) || request.resource.data.issues.size() == 0)
-          && (!('swapCount' in changed()) || request.resource.data.swapCount == resource.data.get('swapCount', 0) + 1)
           && (!('ownerStars' in changed()) || request.resource.data.ownerStars == myStarsAfter()))
         ||
         // người khác: +1 khi tham gia, −1 khi rời (kèm tạo/xóa bản ghi người test)
@@ -73,14 +71,7 @@ service cloud.firestore {
         (signedIn() && resource.data.ownerUid != me()
           && changed().hasOnly(['feedbackCount'])
           && request.resource.data.feedbackCount == resource.data.get('feedbackCount', 0) + 1
-          && exists(testerPath()))
-        ||
-        // người test báo "không cài được" (chỉ sửa dòng của chính mình)
-        (signedIn() && resource.data.ownerUid != me()
-          && changed().hasOnly(['issues'])
-          && request.resource.data.issues.diff(resource.data.get('issues', {})).affectedKeys().hasOnly([me()])
-          && (!(me() in request.resource.data.issues)
-              || request.resource.data.issues[me()].r in ['issLink', 'issCountry', 'issElig']));
+          && exists(testerPath()));
 
       allow delete: if isOwner();
 
@@ -98,7 +89,7 @@ service cloud.firestore {
               && request.resource.data.sub.diff(resource.data.sub).changedKeys().size() == 0
               && request.resource.data.sub.diff(resource.data.sub).removedKeys().size() == 0)
             ||
-            (appOwner() == me() && changed().hasOnly(['rev', 'why'])));
+            (appOwner() == me() && changed().hasOnly(['rev'])));
         allow delete: if signedIn() && (me() == uid || appOwner() == me());
 
         // ảnh chụp màn hình từng ngày
@@ -107,11 +98,7 @@ service cloud.firestore {
           allow create, update: if signedIn() && me() == uid
             && request.resource.data.img is string
             && request.resource.data.img.size() < 160000
-            && str(request.resource.data.note, 200)
-            && request.resource.data.get('more', []) is list
-            && request.resource.data.get('more', []).size() <= 2
-            && (request.resource.data.get('more', []).size() < 1 || (request.resource.data.more[0] is string && request.resource.data.more[0].size() < 160000))
-            && (request.resource.data.get('more', []).size() < 2 || (request.resource.data.more[1] is string && request.resource.data.more[1].size() < 160000));
+            && str(request.resource.data.note, 200);
           allow delete: if signedIn() && (me() == uid || appOwner() == me());
         }
       }
@@ -133,18 +120,11 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && str(request.resource.data.msg, 200);
       allow update: if signedIn() && (
-          // bên nhận: đồng ý, hoặc từ chối kèm lý do
-          (resource.data.toUid == me() && changed().hasOnly(['status', 'answeredAt', 'reason'])
-            && (request.resource.data.status == 'accepted'
-                || (request.resource.data.status == 'declined' && str(request.resource.data.reason, 200)
-                    && request.resource.data.reason.size() > 0)))
+          (resource.data.toUid == me() && changed().hasOnly(['status', 'answeredAt'])
+            && request.resource.data.status in ['accepted', 'declined'])
           ||
-          // bên gửi: hủy yêu cầu, hoặc đánh dấu đã cộng lượt test chéo
           (resource.data.fromUid == me() && changed().hasOnly(['status'])
-            && request.resource.data.status == 'cancelled')
-          ||
-          (resource.data.fromUid == me() && changed().hasOnly(['fromCounted'])
-            && resource.data.status == 'accepted' && request.resource.data.fromCounted == true));
+            && request.resource.data.status == 'cancelled'));
       allow delete: if signedIn() && (resource.data.fromUid == me() || resource.data.toUid == me());
     }
 

@@ -41,23 +41,6 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import org.json.JSONObject;
 
-import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.provider.MediaStore;
-import android.provider.OpenableColumns;
-import android.util.Base64;
-import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.text.TextRecognition;
-import com.google.mlkit.vision.text.TextRecognizer;
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
-import java.io.ByteArrayOutputStream;
-import java.text.SimpleDateFormat;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import java.io.IOException;
 import java.util.concurrent.Executor;
 import java.io.InputStream;
@@ -75,10 +58,6 @@ public class MainActivity extends Activity {
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
     private static final int PICK_FILE = 41;
-    private static final int PICK_SHOT = 42;
-    private String shotCb;                                   // hàm JS chờ ảnh
-    private final Map<String, Uri> shots = new HashMap<>();  // ảnh gốc để đọc chữ
-    private int shotN = 0;
     private OnBackInvokedCallback backCallback;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -228,26 +207,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == PICK_SHOT) {
-            final String cb = shotCb; shotCb = null;
-            if (cb == null) return;
-            if (resultCode != RESULT_OK || data == null || data.getData() == null) { jsRaw(cb, "null"); return; }
-            final Uri uri = data.getData();
-            new Thread(() -> {
-                try {
-                    JSONObject o = new JSONObject();
-                    o.put("img", shotDataUrl(uri, 1000, 110000));
-                    o.put("at", shotTime(uri));
-                    String key = "s" + (++shotN);
-                    shots.put(key, uri);
-                    o.put("key", key);
-                    jsCall(cb, o.toString());
-                } catch (Throwable e) {
-                    jsRaw(cb, "null");
-                }
-            }).start();
-            return;
-        }
         if (requestCode != PICK_FILE || fileCallback == null) return;
         Uri[] result = null;
         if (resultCode == RESULT_OK && data != null && data.getData() != null) {
@@ -283,104 +242,6 @@ public class MainActivity extends Activity {
     private void jsCall(String fn, String arg) {
         String js = "window." + fn + " && window." + fn + "(" + JSONObject.quote(arg == null ? "" : arg) + ")";
         runOnUiThread(() -> web.evaluateJavascript(js, null));
-    }
-
-    private void jsRaw(String fn, String rawArg) {
-        String js = "window." + fn + " && window." + fn + "(" + rawArg + ")";
-        runOnUiThread(() -> web.evaluateJavascript(js, null));
-    }
-
-    // ---------------------------------------------------------------- ảnh chụp màn hình
-    /** Giờ chụp ảnh (ms): ưu tiên DATE_TAKEN, rồi giờ trong tên file Screenshot_yyyyMMdd-HHmmss, rồi lúc ảnh được lưu. */
-    long shotTime(Uri uri) {
-        long taken = 0, added = 0, modified = 0;
-        String name = null;
-        try (Cursor c = getContentResolver().query(uri, null, null, null, null)) {
-            if (c != null && c.moveToFirst()) {
-                int i;
-                if ((i = c.getColumnIndex(MediaStore.MediaColumns.DATE_TAKEN)) >= 0 && !c.isNull(i)) taken = c.getLong(i);
-                if ((i = c.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED)) >= 0 && !c.isNull(i)) added = c.getLong(i) * 1000L;
-                if ((i = c.getColumnIndex(MediaStore.MediaColumns.DATE_MODIFIED)) >= 0 && !c.isNull(i)) modified = c.getLong(i) * 1000L;
-                if ((i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)) >= 0) name = c.getString(i);
-            }
-        } catch (Exception ignored) { }
-        if (taken > 0) return taken;
-        if (name != null) {
-            Matcher m = Pattern.compile("(20\\d{2})(\\d{2})(\\d{2})[-_ ]?(\\d{2})(\\d{2})(\\d{2})").matcher(name);
-            if (m.find()) {
-                try {
-                    SimpleDateFormat f = new SimpleDateFormat("yyyyMMddHHmmss", Locale.US);
-                    return f.parse(m.group(1) + m.group(2) + m.group(3) + m.group(4) + m.group(5) + m.group(6)).getTime();
-                } catch (Exception ignored) { }
-            }
-        }
-        if (added > 0) return added;
-        return modified;
-    }
-
-    Bitmap loadBitmap(Uri uri, int maxSide) throws IOException {
-        BitmapFactory.Options b = new BitmapFactory.Options();
-        b.inJustDecodeBounds = true;
-        try (InputStream in = getContentResolver().openInputStream(uri)) { BitmapFactory.decodeStream(in, null, b); }
-        int side = Math.max(b.outWidth, b.outHeight), sample = 1;
-        while (side / (sample * 2) >= maxSide) sample *= 2;
-        BitmapFactory.Options o = new BitmapFactory.Options();
-        o.inSampleSize = sample;
-        Bitmap bmp;
-        try (InputStream in = getContentResolver().openInputStream(uri)) { bmp = BitmapFactory.decodeStream(in, null, o); }
-        if (bmp == null) throw new IOException("decode");
-        int s = Math.max(bmp.getWidth(), bmp.getHeight());
-        if (s > maxSide) {
-            float k = maxSide / (float) s;
-            Bitmap sc = Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * k), Math.round(bmp.getHeight() * k), true);
-            if (sc != bmp) bmp.recycle();
-            bmp = sc;
-        }
-        return bmp;
-    }
-
-    /** Thu nhỏ + nén JPEG cho vừa giới hạn lưu trữ (độ dài chuỗi base64). */
-    String shotDataUrl(Uri uri, int maxSide, int limit) throws IOException {
-        Bitmap bmp = loadBitmap(uri, maxSide);
-        int q = 60;
-        String out = null;
-        for (int i = 0; i < 7; i++) {
-            ByteArrayOutputStream bo = new ByteArrayOutputStream();
-            bmp.compress(Bitmap.CompressFormat.JPEG, q, bo);
-            out = "data:image/jpeg;base64," + Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP);
-            if (out.length() < limit) break;
-            if (q > 40) q -= 8;
-            else {
-                Bitmap sc = Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * 0.8f), Math.round(bmp.getHeight() * 0.8f), true);
-                bmp.recycle(); bmp = sc;
-            }
-        }
-        bmp.recycle();
-        return out;
-    }
-
-    static void closeQuiet(TextRecognizer r) { try { r.close(); } catch (Exception ignored) { } }
-
-    /** Đọc chữ trong ảnh bằng ML Kit (chạy trên máy, không cần mạng). */
-    void ocr(String arg, String cb) {
-        try {
-            Bitmap bmp;
-            Uri uri = shots.get(arg);
-            if (uri != null) bmp = loadBitmap(uri, 2200);          // ảnh gốc, nét hơn
-            else {
-                String b64 = arg.substring(arg.indexOf(',') + 1);
-                byte[] bytes = Base64.decode(b64, Base64.DEFAULT);
-                bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-            }
-            if (bmp == null) { jsRaw(cb, "null"); return; }
-            final Bitmap img = bmp;
-            TextRecognizer r = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-            r.process(InputImage.fromBitmap(img, 0))
-                    .addOnSuccessListener(t -> { jsCall(cb, t.getText()); img.recycle(); closeQuiet(r); })
-                    .addOnFailureListener(e -> { jsRaw(cb, "null"); img.recycle(); closeQuiet(r); });
-        } catch (Throwable e) {
-            jsRaw(cb, "null");
-        }
     }
 
     /** Hiện bảng chọn tài khoản Google của máy, trả ID token cho JavaScript (Firebase dùng để đăng nhập). */
@@ -474,44 +335,6 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 return false;
             }
-        }
-
-        /** App được cài từ đâu ("com.android.vending" = Google Play). */
-        @JavascriptInterface
-        public String installerOf(String packageName) {
-            try {
-                PackageManager pm = getPackageManager();
-                String src;
-                if (Build.VERSION.SDK_INT >= 30) src = pm.getInstallSourceInfo(packageName).getInstallingPackageName();
-                else src = pm.getInstallerPackageName(packageName);
-                return src == null ? "" : src;
-            } catch (Exception e) {
-                return "";
-            }
-        }
-
-        /** Chọn ảnh chụp màn hình; trả về {img, at, key} cho hàm JS cb. */
-        @JavascriptInterface
-        public void pickShot(final String cb) {
-            runOnUiThread(() -> {
-                if (shotCb != null) jsRaw(shotCb, "null");
-                shotCb = cb;
-                Intent i = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-                try {
-                    startActivityForResult(i, PICK_SHOT);
-                } catch (ActivityNotFoundException e) {
-                    Intent g = new Intent(Intent.ACTION_GET_CONTENT);
-                    g.addCategory(Intent.CATEGORY_OPENABLE);
-                    g.setType("image/*");
-                    try { startActivityForResult(g, PICK_SHOT); }
-                    catch (ActivityNotFoundException e2) { shotCb = null; jsRaw(cb, "null"); }
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public void ocr(final String arg, final String cb) {
-            new Thread(() -> MainActivity.this.ocr(arg, cb)).start();
         }
 
         @JavascriptInterface
