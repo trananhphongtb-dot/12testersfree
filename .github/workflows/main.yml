@@ -20,7 +20,7 @@ jobs:
         with:
           gradle-version: '8.14.3'
 
-      # Khóa ký app: lấy từ Settings > Secrets and variables > Actions
+      # Khóa ký app
       - name: Chuẩn bị khóa ký
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -33,30 +33,30 @@ jobs:
             echo "::warning::Chưa có KEYSTORE_BASE64 — file AAB sẽ chưa ký, chưa đăng lên Play được."
           fi
 
-      - name: In mã SHA-1 của khóa ký (dán vào Firebase để đăng nhập Google)
+      - name: In mã SHA-1 của khóa ký
         if: env.KEYSTORE_FILE != ''
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           SHA=$(keytool -list -v -keystore "$KEYSTORE_FILE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" | grep 'SHA1:' | sed 's/.*SHA1: //')
-          echo "======================================================"
-          echo " SHA-1 khóa tải lên (upload key): $SHA"
-          echo "======================================================"
           echo "### SHA-1 khóa ký: \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
           echo "Dán vào Firebase > Project settings > Your apps > Android app > Add fingerprint." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Dựng APK (cài thử) và AAB (đăng Play)
+      - name: Dựng APK và AAB
+        working-directory: ./tester12
         env:
+          KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle --no-daemon assembleDebug assembleRelease bundleRelease
 
-      - uses: actions/upload-artifact@v4
+      - name: Xuất file kết quả
+        uses: actions/upload-artifact@v4
         with:
-          name: tester12-free
+          name: 12testersfree
           path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/bundle/release/*.aab
+            tester12/app/build/outputs/apk/debug/*.apk
+            tester12/app/build/outputs/apk/release/*.apk
+            tester12/app/build/outputs/bundle/release/*.aab
