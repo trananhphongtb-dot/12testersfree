@@ -20,7 +20,7 @@ jobs:
         with:
           gradle-version: '8.14.3'
 
-      # Khóa ký app (giống các app trước): lấy từ Settings > Secrets and variables > Actions
+      # Khóa ký app: lấy từ Settings > Secrets and variables > Actions
       - name: Chuẩn bị khóa ký
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
