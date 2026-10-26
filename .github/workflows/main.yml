@@ -43,24 +43,25 @@ jobs:
           echo "Dán vào Firebase > Project settings > Your apps > Android app > Add fingerprint." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Dựng APK Release và AAB (Không build Debug)
-        working-directory: ./tester12
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          # Tự động tìm thư mục gốc chứa dự án Android (nơi có file gradlew)
+          cd $(find . -name "gradlew" -exec dirname {} \; | head -n 1)
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease bundleRelease
 
-      # Tạo thư mục chung và gom file vào
       - name: Gom file APK và AAB vào chung thư mục 12testersfree
         run: |
           mkdir -p 12testersfree
-          cp tester12/app/build/outputs/apk/release/*.apk 12testersfree/ || true
-          cp tester12/app/build/outputs/bundle/release/*.aab 12testersfree/ || true
+          # Tự động tìm file apk/aab ở bất kỳ đâu và copy ra thư mục chung
+          find . -name "*.apk" -path "*/release/*" -exec cp {} 12testersfree/ \;
+          find . -name "*.aab" -exec cp {} 12testersfree/ \;
 
-      # Xuất file
-      - uses: actions/upload-artifact@v4
+      - name: Xuất file kết quả
+        uses: actions/upload-artifact@v4
         with:
           name: 12testersfree
           path: 12testersfree/
