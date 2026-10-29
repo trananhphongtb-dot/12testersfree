@@ -11,8 +11,9 @@ android {
         applicationId 'vn.tester12.free'
         minSdk 26
         targetSdk 36
-        versionCode 5
-        versionName '2.1.2'
+        versionCode 6
+        versionName '2.2.0'
+        manifestPlaceholders = [appLabel: '@string/app_name']
     }
 
     signingConfigs {
@@ -29,6 +30,17 @@ android {
     }
 
     buildTypes {
+        // Bản thử (app-debug.apk): cài song song với bản đang chạy trên Google Play,
+        // tên gói vn.tester12.free.beta, tên "12 Testers Beta", ký bằng cùng khóa tải lên.
+        debug {
+            applicationIdSuffix '.beta'
+            versionNameSuffix '-beta'
+            manifestPlaceholders = [appLabel: '12 Testers Beta']
+            def ksd = System.getenv('KEYSTORE_FILE')
+            if (ksd != null && new File(ksd).exists()) {
+                signingConfig signingConfigs.release
+            }
+        }
         release {
             minifyEnabled false
             def ks = System.getenv('KEYSTORE_FILE')
@@ -56,4 +68,6 @@ dependencies {
     implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
     // Kiểm tra ngầm để báo app mới / người test mới
     implementation 'androidx.work:work-runtime:2.9.1'
+    // Đọc chữ trong ảnh chụp màn hình (chạy trên máy, không cần mạng)
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
 }
