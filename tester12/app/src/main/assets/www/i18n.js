@@ -559,3 +559,29 @@ Object.assign(I18N.en, {
   battL: "Not getting alerts?",
   battBody: "Some phones (Xiaomi, Oppo, Vivo, Realme…) kill background apps. Go to Settings > Apps > 12 Testers Free > Battery, choose \"Unrestricted\" and enable \"Autostart\" to get reminders on time."
 });
+
+/* ===== 3.1 ===== */
+Object.assign(I18N.vi, {
+  setupTitle: "Thiết lập lần đầu", setupSub: "Làm 2 bước dưới đây (chỉ 1 lần) để được test và đăng app.",
+  setupDone: "Hoàn thành", setupHint: "Chưa xong: mỗi bước cần 1 ảnh chụp màn hình hợp lệ",
+  missionLeft: "Còn {l}/{t} app chưa test", missionDone2: "Đã test xong, hãy test thêm", btnTest: "Test",
+  tabActive: "Đang test", tabStopped: "Đã dừng", tabTasks: "Nhiệm vụ",
+  bToday: "Đã test hôm nay", bNotToday: "Chưa test hôm nay", bNever: "Chưa test bao giờ",
+  ownerBadge: "Của bạn", openBtnOwn: "Mở",
+  histToday: "Đã test hôm nay", histEver: "Đã từng test", nTimes: "Đã test {n} lần", lastTest: "Gần nhất {d}", nDays: "{n} ngày",
+  pendReports: "Báo cáo chờ duyệt", moreBtn: "Thêm", ownerUpd: "Báo cập nhật mới", noMine: "Bạn chưa đăng app nào",
+  postCostNote: "App thứ 2 trở đi tốn {c}⭐ khi đăng (app đầu miễn phí).", postNeedTitle: "Chưa đủ sao",
+  errNoStars: "Đăng thêm app tốn {c}⭐, bạn còn thiếu {n}⭐. Hãy test thêm app để kiếm sao."
+});
+Object.assign(I18N.en, {
+  setupTitle: "First-time setup", setupSub: "Do these 2 steps once so you can test and post apps.",
+  setupDone: "Done", setupHint: "Not finished: each step needs a valid screenshot",
+  missionLeft: "{l}/{t} apps left to test", missionDone2: "All done — test some more", btnTest: "Test",
+  tabActive: "Testing", tabStopped: "Stopped", tabTasks: "Missions",
+  bToday: "Tested today", bNotToday: "Not tested today", bNever: "Never tested",
+  ownerBadge: "Yours", openBtnOwn: "Open",
+  histToday: "Tested today", histEver: "Tested before", nTimes: "Tested {n}×", lastTest: "Last {d}", nDays: "{n} days",
+  pendReports: "Reports to review", moreBtn: "More", ownerUpd: "Report new update", noMine: "You haven't posted any app yet",
+  postCostNote: "Each app after the first costs {c}⭐ to post (first one is free).", postNeedTitle: "Not enough stars",
+  errNoStars: "Posting another app costs {c}⭐ and you need {n}⭐ more. Test apps to earn stars."
+});

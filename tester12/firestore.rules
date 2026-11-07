@@ -1,5 +1,5 @@
 rules_version = '2';
-// Quy tắc bảo mật cho 12 Testers Free (bản 3.0).
+// Quy tắc bảo mật cho 12 Testers Free (bản 3.1).
 // Dán toàn bộ vào Firebase Console > Firestore Database > Rules > Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -16,20 +16,13 @@ service cloud.firestore {
       allow create: if signedIn() && me() == uid
         && request.resource.data.stars == 0
         && str(request.resource.data.name, 40);
-      // Sao: +5 mỗi lần test (+5 cập nhật = +10), bị trừ 5 khi báo cáo bị từ chối,
-      // hoặc trừ đúng giá khi mở ô đăng app (ô 2: 50, ô 3: 100, ô 4: 150).
+      // Sao: +5 mỗi lần test (+5 cập nhật = +10), -5 khi báo cáo bị từ chối, -10 khi đăng thêm app.
       allow update: if signedIn() && me() == uid
-        && changed().hasOnly(['name', 'testerEmail', 'stars', 'lang', 'slots', 'mdays', 'chk'])
+        && changed().hasOnly(['name', 'testerEmail', 'stars', 'lang', 'slots', 'mdays', 'chk', 'setup'])
         && str(request.resource.data.name, 40)
         && (!('stars' in changed()) || (
-              request.resource.data.stars >= 0 && (
-                (request.resource.data.stars - resource.data.get('stars', 0)) in [2, 5, 10, 20, -5]
-                || ('slots' in changed())
-                   && request.resource.data.slots == resource.data.get('slots', 1) + 1
-                   && request.resource.data.slots <= 4
-                   && request.resource.data.stars == resource.data.get('stars', 0)
-                        - (resource.data.get('slots', 1) == 1 ? 50 : (resource.data.get('slots', 1) == 2 ? 100 : 150)))))
-        && (!('slots' in changed()) || ('stars' in changed()));
+              request.resource.data.stars >= 0
+              && (request.resource.data.stars - resource.data.get('stars', 0)) in [2, 5, 10, 20, -5, -10]));
       allow delete: if signedIn() && me() == uid;
 
       match /joined/{appId} {
