@@ -529,13 +529,31 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> Toast.makeText(MainActivity.this, text, Toast.LENGTH_SHORT).show());
         }
 
+        /** Tiến độ nhiệm vụ ngày (JSON {on,day,n,t,title,body}); chuỗi rỗng = tắt nhắc. */
         @JavascriptInterface
-        public void setReminder(boolean enabled, int hour, int minute, String title, String body) {
-            if (enabled && Build.VERSION.SDK_INT >= 33
+        public void setMission(String json) {
+            boolean on = json != null && !json.isEmpty();
+            if (on && Build.VERSION.SDK_INT >= 33
                     && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                runOnUiThread(() -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 7));
+                android.content.SharedPreferences sp = getSharedPreferences("ui", MODE_PRIVATE);
+                if (!sp.getBoolean("askedNotif", false)) {
+                    sp.edit().putBoolean("askedNotif", true).apply();
+                    runOnUiThread(() -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 8));
+                }
             }
-            ReminderReceiver.save(MainActivity.this, enabled, hour, minute, title, body);
+            ReminderReceiver.saveMission(MainActivity.this, json);
+        }
+
+        /** Số phiên bản (versionCode) của app đã cài; 0 nếu chưa cài. */
+        @JavascriptInterface
+        public String versionOf(String packageName) {
+            try {
+                android.content.pm.PackageInfo pi = getPackageManager().getPackageInfo(packageName, 0);
+                long v = Build.VERSION.SDK_INT >= 28 ? pi.getLongVersionCode() : pi.versionCode;
+                return String.valueOf(v);
+            } catch (Exception e) {
+                return "0";
+            }
         }
 
         @JavascriptInterface

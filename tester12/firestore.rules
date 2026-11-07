@@ -1,5 +1,5 @@
 rules_version = '2';
-// Quy tắc bảo mật cho 12 Testers Free (bản 2.2).
+// Quy tắc bảo mật cho 12 Testers Free (bản 3.0).
 // Dán toàn bộ vào Firebase Console > Firestore Database > Rules > Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -16,11 +16,20 @@ service cloud.firestore {
       allow create: if signedIn() && me() == uid
         && request.resource.data.stars == 0
         && str(request.resource.data.name, 40);
-      // Sao chỉ được cộng theo các mức trong app (+2, +5, +10, +20).
+      // Sao: +5 mỗi lần test (+5 cập nhật = +10), bị trừ 5 khi báo cáo bị từ chối,
+      // hoặc trừ đúng giá khi mở ô đăng app (ô 2: 50, ô 3: 100, ô 4: 150).
       allow update: if signedIn() && me() == uid
-        && changed().hasOnly(['name', 'testerEmail', 'stars', 'lang'])
+        && changed().hasOnly(['name', 'testerEmail', 'stars', 'lang', 'slots', 'mdays', 'chk'])
         && str(request.resource.data.name, 40)
-        && (!('stars' in changed()) || (request.resource.data.stars - resource.data.get('stars', 0)) in [2, 5, 10, 20]);
+        && (!('stars' in changed()) || (
+              request.resource.data.stars >= 0 && (
+                (request.resource.data.stars - resource.data.get('stars', 0)) in [2, 5, 10, 20, -5]
+                || ('slots' in changed())
+                   && request.resource.data.slots == resource.data.get('slots', 1) + 1
+                   && request.resource.data.slots <= 4
+                   && request.resource.data.stars == resource.data.get('stars', 0)
+                        - (resource.data.get('slots', 1) == 1 ? 50 : (resource.data.get('slots', 1) == 2 ? 100 : 150)))))
+        && (!('slots' in changed()) || ('stars' in changed()));
       allow delete: if signedIn() && me() == uid;
 
       match /joined/{appId} {
@@ -55,7 +64,8 @@ service cloud.firestore {
       allow update: if
         // chủ app: sửa thông tin, ẩn/hiện, đồng bộ tên + số sao (không tự sửa số người test)
         (isOwner()
-          && changed().hasOnly(['name', 'instr', 'icon', 'target', 'active', 'ownerName', 'ownerStars', 'issues', 'swapCount'])
+          && changed().hasOnly(['name', 'instr', 'icon', 'target', 'active', 'ownerName', 'ownerStars', 'issues', 'swapCount',
+                             'paused', 'pausedAt', 'ownerSeen', 'ver', 'upAt', 'done'])
           && validApp(request.resource.data)
           && (!('issues' in changed()) || request.resource.data.issues.size() == 0)
           && (!('swapCount' in changed()) || request.resource.data.swapCount == resource.data.get('swapCount', 0) + 1)
@@ -75,6 +85,17 @@ service cloud.firestore {
           && request.resource.data.feedbackCount == resource.data.get('feedbackCount', 0) + 1
           && exists(testerPath()))
         ||
+        // người test báo phiên bản app đã cài: lần 1 ghi "chờ xác nhận", người khác báo trùng thì thành bản mới nhất
+        (signedIn() && resource.data.ownerUid != me()
+          && ((changed().hasOnly(['verPend'])
+                && request.resource.data.verPend.by == me()
+                && request.resource.data.verPend.v is int
+                && request.resource.data.verPend.v > resource.data.get('ver', 0))
+              || (changed().hasOnly(['ver'])
+                && request.resource.data.ver > resource.data.get('ver', 0)
+                && request.resource.data.ver == resource.data.get('verPend', {}).get('v', -1)
+                && resource.data.get('verPend', {}).get('by', '') != me())))
+        ||
         // người test báo "không cài được" (chỉ sửa dòng của chính mình)
         (signedIn() && resource.data.ownerUid != me()
           && changed().hasOnly(['issues'])
@@ -89,12 +110,12 @@ service cloud.firestore {
       match /testers/{uid} {
         allow read: if signedIn() && (me() == uid || appOwner() == me());
         allow create: if signedIn() && me() == uid && appOwner() != me()
-          && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'joinedAt', 'joinDay', 'sub', 'rev'])
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'joinedAt', 'joinDay', 'sub', 'rev', 'ver'])
           && request.resource.data.sub.size() == 1
           && request.resource.data.rev.size() == 0;
         // người test: chỉ được thêm ngày đã nộp (sub). Chủ app: chỉ được duyệt (rev).
         allow update: if signedIn() && (
-            (me() == uid && changed().hasOnly(['sub', 'name', 'email'])
+            (me() == uid && changed().hasOnly(['sub', 'name', 'email', 'ver'])
               && request.resource.data.sub.diff(resource.data.sub).changedKeys().size() == 0
               && request.resource.data.sub.diff(resource.data.sub).removedKeys().size() == 0)
             ||

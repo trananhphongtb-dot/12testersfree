@@ -22,12 +22,11 @@ window.COMMUNITY_GROUP = {
   link: "https://groups.google.com/g/12testersfree"
 };
 
-// Sao ⭐: thưởng cho người đi test. App của chủ nhiều sao được xếp lên trước ở Khám phá.
+// Sao ⭐: mỗi lần test xong +5; cập nhật app lên bản mới +5 thêm.
+// Sao dùng để mở ô đăng app thứ 2 (50), 3 (100), 4 (150).
 window.STARS = {
-  join: 10,      // hoàn thành tham gia test 1 app
-  day: 2,        // nộp ảnh mỗi ngày
-  feedback: 5,   // góp ý lần đầu cho 1 app
-  finish: 20     // test đủ 14 ngày
+  test: 5,
+  upd: 5
 };
 
 // Package của chính app này (nút "Đánh giá trên Google Play")
