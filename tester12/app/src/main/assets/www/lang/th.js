@@ -348,3 +348,4 @@ Object.assign(I18N.th, {
   errDevName: "ใส่ชื่อผู้พัฒนาของแอป",
   nInstalled: "ติดตั้งแล้ว {n}"
 });
+Object.assign(I18N.th, { gateTitle: "เข้าร่วมกลุ่ม Google เพื่อทดสอบ", gateNote: "Google Play ให้ติดตั้งเวอร์ชันทดสอบได้เฉพาะเมื่อคุณอยู่ในกลุ่ม Google ของเรา ทำเพียงครั้งเดียว" });

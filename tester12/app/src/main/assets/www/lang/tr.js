@@ -348,3 +348,4 @@ Object.assign(I18N.tr, {
   errDevName: "Uygulamanın yazar adını girin",
   nInstalled: "{n} kurulum"
 });
+Object.assign(I18N.tr, { gateTitle: "Test etmek için Google grubuna katılın", gateNote: "Google Play, test sürümlerinin kurulumuna yalnızca Google grubumuzdaki kişiler için izin verir. Bir kez yapmanız yeterli." });

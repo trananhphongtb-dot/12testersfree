@@ -348,3 +348,4 @@ Object.assign(I18N.ja, {
   errDevName: "アプリの作者名を入力してください",
   nInstalled: "インストール {n}"
 });
+Object.assign(I18N.ja, { gateTitle: "テストするには Google グループに参加", gateNote: "Google Play のテスト版は、当グループのメンバーだけがインストールできます。一度だけ行えば十分です。" });

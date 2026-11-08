@@ -348,3 +348,4 @@ Object.assign(I18N.pt, {
   errDevName: "Digite o nome do autor do app",
   nInstalled: "{n} instalações"
 });
+Object.assign(I18N.pt, { gateTitle: "Entre no grupo do Google para testar", gateNote: "O Google Play só permite instalar versões de teste se você estiver no nosso grupo do Google. Só é preciso fazer uma vez." });

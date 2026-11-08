@@ -348,3 +348,4 @@ Object.assign(I18N.fil, {
   errDevName: "Ilagay ang pangalan ng may-akda ng app",
   nInstalled: "{n} ang nag-install"
 });
+Object.assign(I18N.fil, { gateTitle: "Sumali sa Google group para mag-test", gateNote: "Pinapayagan lang ng Google Play ang pag-install ng test build kung nasa Google group namin ka. Isang beses lang ito." });

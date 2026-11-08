@@ -348,3 +348,4 @@ Object.assign(I18N.ko, {
   errDevName: "앱 작성자 이름을 입력하세요",
   nInstalled: "설치 {n}"
 });
+Object.assign(I18N.ko, { gateTitle: "테스트하려면 Google 그룹에 가입하세요", gateNote: "Google Play는 저희 Google 그룹 회원만 테스트 버전을 설치할 수 있게 합니다. 한 번만 하면 됩니다." });

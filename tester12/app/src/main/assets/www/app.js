@@ -475,7 +475,6 @@
   // ================================================================ shell
   const TABS = [["test", "tabTest", IC.flask], ["tasks", "tabTasks", IC.tasks], ["mine", "tabMine", IC.market], ["me", "tabMe", IC.user]];
   function renderShell() {
-    if (!setupDone()) return renderSetup();
     root.innerHTML = `<main id="main"></main>
       <nav class="tabs">${TABS.map(([id, k, svg]) =>
         `<button data-tab="${id}"><svg viewBox="0 0 24 24">${svg}</svg>${esc(t(k))}</button>`).join("")}</nav>`;
@@ -876,6 +875,7 @@
   }
   function openTest(id) {
     const a = (S.apps || []).find(x => x.id === id); if (!a) return;
+    if (!setupDone()) return groupGate(() => openTest(id));
     const pg = page(a.name, "", null);
     const inner = $(".inner", pg);
     const paint = () => { if (!pg.isConnected) return; const y = pg.scrollTop; inner.innerHTML = testHtml(a); bindTest(inner, a, paint, pg); pg.scrollTop = y; };
@@ -1065,6 +1065,7 @@
     paintMine(m); refreshDot();
   }
   function startAdd() {
+    if (!setupDone()) return groupGate(startAdd);
     const have = S.me.stars || 0;
     if (actMine().length >= 1 && have < POST_COST) {
       sheet(`<h2>⭐ ${esc(t("postNeedTitle"))}</h2><p class="sub" style="margin-top:0">${esc(t("errNoStars", { c: POST_COST, n: POST_COST - have }))}</p>
@@ -1316,6 +1317,29 @@
       v.img = sh.img; v.st = null; v.busy = true; repaint();
       const r = await scanShot(k[0] === "g" ? "group" : "console", sh, since);
       v.busy = false; v.st = r.st; v.msg = r.msg || ""; repaint();
+    });
+  }
+
+  // ================================================================ cổng vào nhóm Google (chỉ hỏi khi lần đầu Test / đăng app)
+  function groupGate(then) {
+    const g = { st: null, img: null }, since = Date.now();
+    page(t("gateTitle"), `<div class="card sucard" id="gg">
+        <div class="sub" style="margin:0 0 10px">${esc(t("gateNote"))}</div>
+        <div class="title" style="font-size:16px">${esc(t("ob1Title"))}</div>
+        <div class="sub">${esc(t("ob1Body", { email: S.me.testerEmail || S.user.email || "" }))}</div>
+        <button class="btn block" id="gjoin" style="margin:12px 0 8px">${esc(t("ob1Btn"))}</button>
+        <div id="gshot"></div></div>
+      <button class="btn block" id="gdone" style="padding:16px;font-size:16px">${esc(t("setupDone"))}</button>`, pg => {
+      const paint = () => { $("#gshot", pg).innerHTML = vshotHtml("g", g, t("grpShot")); bindVshots($("#gshot", pg), { g }, since, paint); };
+      paint();
+      $("#gjoin", pg).onclick = () => openUrl(CG.link);
+      $("#gdone", pg).onclick = async ev => {
+        if (!vOk(g)) { toast(t("setupHint")); const e = $("#gg", pg); e.classList.remove("flash"); void e.offsetWidth; e.classList.add("flash"); return; }
+        busy(ev.target, true);
+        LS.set("setup_" + S.user.uid, true);
+        try { await userRef().update({ setup: true }); } catch (e) { console.error(e); }
+        S.me.setup = true; closeTop(); then();
+      };
     });
   }
 

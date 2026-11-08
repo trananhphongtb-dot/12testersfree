@@ -348,3 +348,4 @@ Object.assign(I18N.ms, {
   errDevName: "Masukkan nama pencipta apl",
   nInstalled: "{n} dipasang"
 });
+Object.assign(I18N.ms, { gateTitle: "Sertai kumpulan Google untuk menguji", gateNote: "Google Play hanya membenarkan pemasangan versi ujian jika anda berada dalam kumpulan Google kami. Cukup sekali sahaja." });

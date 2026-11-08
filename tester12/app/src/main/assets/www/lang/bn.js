@@ -348,3 +348,4 @@ Object.assign(I18N.bn, {
   errDevName: "অ্যাপের লেখকের নাম লিখুন",
   nInstalled: "{n}টি ইনস্টল"
 });
+Object.assign(I18N.bn, { gateTitle: "টেস্ট করতে Google গ্রুপে যোগ দিন", gateNote: "আপনি আমাদের Google গ্রুপে থাকলেই Google Play টেস্ট ভার্সন ইনস্টল করতে দেয়। এটি শুধু একবার করতে হবে।" });

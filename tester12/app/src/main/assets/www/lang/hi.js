@@ -348,3 +348,4 @@ Object.assign(I18N.hi, {
   errDevName: "ऐप के लेखक का नाम लिखें",
   nInstalled: "{n} इंस्टॉल"
 });
+Object.assign(I18N.hi, { gateTitle: "टेस्ट करने के लिए Google ग्रुप से जुड़ें", gateNote: "Google Play टेस्ट वर्शन तभी इंस्टॉल करने देता है जब आप हमारे Google ग्रुप में हों। यह सिर्फ़ एक बार करना है।" });

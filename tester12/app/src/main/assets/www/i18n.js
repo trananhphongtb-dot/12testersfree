@@ -593,3 +593,5 @@ Object.assign(I18N.en, {
   devNameL: "Author name (as shown on Play Console)", devNamePh: "e.g. Phong Studio", devNameHint: "The developer name shown on this app's Google Play page.",
   errDevName: "Enter the app's author name", nInstalled: "{n} installed"
 });
+Object.assign(I18N.vi, { gateTitle: "Vào nhóm Google để test", gateNote: "Google Play chỉ cho cài bản test khi bạn đã ở trong nhóm Google của chúng tôi. Chỉ cần làm một lần." });
+Object.assign(I18N.en, { gateTitle: "Join the Google group to test", gateNote: "Google Play only lets you install test builds if you are in our Google group. You only need to do this once. (Reviewers: this step needs a real Google Groups account.)" });

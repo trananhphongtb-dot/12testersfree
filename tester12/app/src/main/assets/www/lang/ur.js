@@ -348,3 +348,4 @@ Object.assign(I18N.ur, {
   errDevName: "ایپ کے مصنف کا نام درج کریں",
   nInstalled: "{n} انسٹال"
 });
+Object.assign(I18N.ur, { gateTitle: "ٹیسٹ کے لیے Google گروپ میں شامل ہوں", gateNote: "Google Play ٹیسٹ ورژن صرف تب انسٹال کرنے دیتا ہے جب آپ ہمارے Google گروپ میں ہوں۔ یہ صرف ایک بار کرنا ہے۔" });

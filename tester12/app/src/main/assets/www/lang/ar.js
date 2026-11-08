@@ -348,3 +348,4 @@ Object.assign(I18N.ar, {
   errDevName: "أدخل اسم مؤلف التطبيق",
   nInstalled: "{n} تثبيت"
 });
+Object.assign(I18N.ar, { gateTitle: "انضم إلى مجموعة Google للاختبار", gateNote: "لا يسمح Google Play بتثبيت نسخ الاختبار إلا إذا كنت في مجموعة Google الخاصة بنا. يلزم ذلك مرة واحدة فقط." });

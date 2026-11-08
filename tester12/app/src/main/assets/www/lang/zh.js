@@ -348,3 +348,4 @@ Object.assign(I18N.zh, {
   errDevName: "请输入应用的作者名称",
   nInstalled: "{n} 次安装"
 });
+Object.assign(I18N.zh, { gateTitle: "加入 Google 群组后才能测试", gateNote: "只有加入我们的 Google 群组，Google Play 才允许安装测试版。只需做一次。" });

@@ -348,3 +348,4 @@ Object.assign(I18N.ru, {
   errDevName: "Введите имя автора приложения",
   nInstalled: "Установок: {n}"
 });
+Object.assign(I18N.ru, { gateTitle: "Вступите в группу Google, чтобы тестировать", gateNote: "Google Play разрешает ставить тестовые версии только участникам нашей группы Google. Нужно сделать один раз." });
