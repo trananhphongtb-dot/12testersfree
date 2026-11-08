@@ -694,6 +694,8 @@
     if (S.moreFn && !stack.length && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 400) S.moreFn();
   }, { passive: true });
 
+  // tên hiển thị gọn như tên nhà phát hành: tối đa 2 từ cuối, 18 ký tự
+  const shortName = n => { const w = String(n || "").trim().split(/\s+/).filter(Boolean); const r = (w.length > 2 ? w.slice(-2) : w).join(" "); return r.length > 18 ? r.slice(0, 17) + "…" : r; };
   const isOwn = a => a.ownerUid === S.user.uid;
   const ownList = () => (S.apps || []).filter(a => isOwn(a) && a.active !== false && !a.done && !a.paused);
   const rank = a => { const j = jOf(a); return j ? (doneTodayJ(j) ? 2 : 1) : 3; };
@@ -728,7 +730,7 @@
     const go = own ? `<span class="go">${esc(t("openBtnOwn"))}</span>` : a.paused ? `<span class="go dn">⏸</span>`
       : td ? (us.has ? `<span class="go">⤓ +${ST.upd}⭐</span>` : `<span class="go dn">✓</span>`) : `<span class="go">+${ST.test}⭐</span>`;
     return `<div class="lrow ${own ? "own" : ""}" data-app="${esc(a.id)}">${iconHtml(a, "s")}
-      <div class="g"><div class="nm ell">${esc(a.name)}<small>${esc(a.ownerName || "")}</small></div>
+      <div class="g"><div class="nm ell">${esc(a.name)}<small>${esc(shortName(a.ownerName))}</small></div>
         <div class="bd">${bd.join("")}</div>
         <div class="mt"><span>👥 ${esc(t("nInstalled", { n: a.testersCount || 0 }))}</span><span>📅 ${up}/14</span></div></div>${go}</div>`;
   }
@@ -779,7 +781,7 @@
   }
   function histRow(j) {
     return `<div class="lrow" data-hist="${esc(j.id)}">${iconHtml(j, "s")}
-      <div class="g"><div class="nm ell">${esc(j.name)}<small>${esc(j.ownerName || "")}</small></div>
+      <div class="g"><div class="nm ell">${esc(j.name)}<small>${esc(shortName(j.ownerName))}</small></div>
         <div class="mt"><span>🔁 ${esc(t("nTimes", { n: j.days || 1 }))}</span><span>📅 ${esc(t("lastTest", { d: j.lastDay || "" }))}</span></div></div>
       ${doneTodayJ(j) ? `<span class="go dn">✓</span>` : ""}</div>`;
   }
@@ -844,7 +846,7 @@
     const instOk = st.installed && st.fromPlay, used = p.used >= USE_MS, today1 = doneTodayJ(j);
     const iss = (a.issues || {})[S.user.uid];
     const head = `<div class="card" style="padding:12px">
-      <div class="row">${iconHtml(a)}<div class="grow"><div class="title ell">${esc(a.name)}</div><div class="sub ell">${esc(a.pkg)} · ${esc(a.ownerName || "")}</div></div>
+      <div class="row">${iconHtml(a)}<div class="grow"><div class="title ell">${esc(a.name)}</div><div class="sub ell">${esc(a.pkg)} · ${esc(shortName(a.ownerName))}</div></div>
         <div class="iconbtns"><button class="ibtn" data-x="share">${IC.share}</button><button class="ibtn r" data-x="report">${IC.flag}</button></div></div>
       <div class="st3"><div><b>${a.testersCount || 0}/${a.target || 12}</b><small>${esc(t("stInstalledS"))}</small></div>
         <div><b>${daysUp(a)}/14</b><small>${esc(t("stAppDays"))}</small></div>
@@ -982,7 +984,7 @@
         <div class="sub" style="margin-top:2px">${esc(bonus ? t("popBonus", { p: bonus }) : t("popSaved"))}</div>
         <div style="font-weight:800;font-size:17px;margin:12px 0 2px">${esc(completed ? t("popMissionDone") : t("popProgress", { n, t: tt }))}</div>
         ${nxt ? `<div class="lbl">${esc(t("nextApp"))}</div>
-          <div class="row" style="justify-content:center;margin-bottom:12px">${iconHtml(nxt, "s")}<div style="text-align:left"><b>${esc(nxt.name)}</b><div class="sub">${esc(nxt.ownerName || "")}</div></div></div>
+          <div class="row" style="justify-content:center;margin-bottom:12px">${iconHtml(nxt, "s")}<div style="text-align:left"><b>${esc(nxt.name)}</b><div class="sub">${esc(shortName(nxt.ownerName))}</div></div></div>
           <button class="btn bl block" data-n="go">▶ ${esc(t("testNext"))}</button>` : ""}
         <button class="btn ghost block" data-n="x" style="margin-top:8px">${esc(nxt ? t("later") : t("close"))}</button></div>`, el => {
       $("[data-n=x]", el).onclick = closeTop;
@@ -1380,7 +1382,6 @@
     let icon = a.icon || "", countries = false;
     const since = Date.now(), cv = { st: null, img: null };
     const instr0 = a.instr || a.desc || "";
-    const dev0 = isNew ? ((S.mine || []).map(x => x.ownerName).find(Boolean) || "") : (a.ownerName || "");
     page(isNew ? t("addApp") : t("edit"), `
       ${isNew ? `<div class="card pre">
         <h4 style="margin-top:0">${esc(t("preConsole"))}</h4>
@@ -1398,9 +1399,6 @@
       <div class="card">
         <div class="title" style="font-size:17px">${esc(t("appDetails"))}</div>
         <div class="upicon" id="picon">${icon ? `<img src="${esc(icon)}" alt="">` : `<div>${IC.img}<div>${esc(t("uploadIcon"))} <span style="color:var(--red)">*</span></div></div>`}</div>
-        <label class="l">${esc(t("devNameL"))}</label>
-        <input id="pdev" type="text" maxlength="40" value="${esc(dev0)}" placeholder="${esc(t("devNamePh"))}">
-        <div class="hint">${esc(t("devNameHint"))}</div>
         <label class="l">${esc(t("appNameL"))}</label>
         <input id="pname" type="text" maxlength="30" value="${esc(a.name)}" placeholder="${esc(t("appNamePh"))}">
         <div class="count"><span id="pnc">${a.name.length}</span>/30</div>
@@ -1459,8 +1457,6 @@
           if (bad) { err.textContent = t(bad[0]); $(bad[1], pg).scrollIntoView({ behavior: "smooth", block: "center" }); return; }
         }
         if (!icon) { err.textContent = t("errIcon"); return; }
-        const dev = $("#pdev", pg).value.trim().slice(0, 40);
-        if (!dev) { err.textContent = t("errDevName"); $("#pdev", pg).scrollIntoView({ behavior: "smooth", block: "center" }); return; }
         if (!name) { err.textContent = t("errAppName"); return; }
         if (isNew && !isPkg(pkg)) { err.textContent = t("errPkg"); return; }
         if (instr.length < 5) { err.textContent = t("errInstr"); return; }
@@ -1473,7 +1469,7 @@
             if (!dup.empty) { err.textContent = t("errDupPkg"); busy(ev.target, false); return; }
             const b = db.batch();
             b.set(db.collection("apps").doc(), {
-              ownerUid: S.user.uid, ownerName: dev, ownerSeen: FV.serverTimestamp(),
+              ownerUid: S.user.uid, ownerName: shortName(S.me.name), ownerSeen: FV.serverTimestamp(),
               name, pkg, icon, instr, target, mode: "community", active: true,
               testersCount: 0, feedbackCount: 0, createdAt: FV.serverTimestamp()
             });
@@ -1481,7 +1477,7 @@
             await b.commit();
             if (c2) S.me.stars -= c2;
           } else {
-            await appRef(a.id).update({ name, icon, instr, target, ownerName: dev });
+            await appRef(a.id).update({ name, icon, instr, target });
           }
           closeAll(); toast(t("saved"));
           S.apps = null; S.mine = null; S.openMine = null;
