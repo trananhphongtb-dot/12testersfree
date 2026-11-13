@@ -349,3 +349,4 @@ Object.assign(I18N.fil, {
   nInstalled: "{n} ang nag-install"
 });
 Object.assign(I18N.fil, { gateTitle: "Sumali sa Google group para mag-test", gateNote: "Pinapayagan lang ng Google Play ang pag-install ng test build kung nasa Google group namin ka. Isang beses lang ito." });
+Object.assign(I18N.fil, { pausedHint: "Naka-pause ang app na ito: 5 araw nang hindi nagte-test ng app ng iba ang may-ari.", pausedOwn: "Naka-pause: 5 araw ka nang hindi nagte-test. Mag-test ng isang app para agad itong ibalik.", nPausedSub: "Mag-test ng isang app para ibalik" });

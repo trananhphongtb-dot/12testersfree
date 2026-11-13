@@ -595,3 +595,5 @@ Object.assign(I18N.en, {
 });
 Object.assign(I18N.vi, { gateTitle: "Vào nhóm Google để test", gateNote: "Google Play chỉ cho cài bản test khi bạn đã ở trong nhóm Google của chúng tôi. Chỉ cần làm một lần." });
 Object.assign(I18N.en, { gateTitle: "Join the Google group to test", gateNote: "Google Play only lets you install test builds if you are in our Google group. You only need to do this once. (Reviewers: this step needs a real Google Groups account.)" });
+Object.assign(I18N.vi, { pausedHint: "App này đang tạm dừng vì chủ app 5 ngày chưa test app của người khác.", pausedOwn: "App đang tạm dừng vì bạn 5 ngày chưa test. Test 1 app của người khác là chạy lại ngay.", nPausedSub: "Test 1 app của người khác để bật lại", unpausedOk: "Đã bật lại các app của bạn" });
+Object.assign(I18N.en, { pausedHint: "This app is paused because its owner hasn't tested anyone's app for 5 days.", pausedOwn: "Paused because you haven't tested for 5 days. Test one app to turn it back on right away.", nPausedSub: "Test one app to turn it back on", unpausedOk: "Your apps are back on" });

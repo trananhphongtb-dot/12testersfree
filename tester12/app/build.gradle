@@ -11,8 +11,8 @@ android {
         applicationId 'vn.tester12.free'
         minSdk 26
         targetSdk 36
-        versionCode 11
-        versionName '3.3.0'
+        versionCode 12
+        versionName '3.4.0'
         manifestPlaceholders = [appLabel: '@string/app_name']
     }
 

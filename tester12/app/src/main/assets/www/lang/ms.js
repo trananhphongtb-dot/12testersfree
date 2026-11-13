@@ -349,3 +349,4 @@ Object.assign(I18N.ms, {
   nInstalled: "{n} dipasang"
 });
 Object.assign(I18N.ms, { gateTitle: "Sertai kumpulan Google untuk menguji", gateNote: "Google Play hanya membenarkan pemasangan versi ujian jika anda berada dalam kumpulan Google kami. Cukup sekali sahaja." });
+Object.assign(I18N.ms, { pausedHint: "Apl ini dijeda: pemiliknya tidak menguji apl orang lain selama 5 hari.", pausedOwn: "Dijeda: anda tidak menguji selama 5 hari. Uji satu apl untuk aktif semula serta-merta.", nPausedSub: "Uji satu apl untuk aktif semula" });

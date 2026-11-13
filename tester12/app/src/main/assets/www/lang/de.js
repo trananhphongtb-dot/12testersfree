@@ -349,3 +349,4 @@ Object.assign(I18N.de, {
   nInstalled: "{n} Installationen"
 });
 Object.assign(I18N.de, { gateTitle: "Tritt der Google-Gruppe bei, um zu testen", gateNote: "Google Play erlaubt Test-Versionen nur, wenn du in unserer Google-Gruppe bist. Das ist nur einmal nötig." });
+Object.assign(I18N.de, { pausedHint: "Diese App ist pausiert: Der Autor hat seit 5 Tagen keine App getestet.", pausedOwn: "Pausiert: Du hast seit 5 Tagen nichts getestet. Teste eine App, um sie sofort zu reaktivieren.", nPausedSub: "Teste eine App, um zu reaktivieren" });

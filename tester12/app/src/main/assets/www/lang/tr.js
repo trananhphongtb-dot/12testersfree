@@ -349,3 +349,4 @@ Object.assign(I18N.tr, {
   nInstalled: "{n} kurulum"
 });
 Object.assign(I18N.tr, { gateTitle: "Test etmek için Google grubuna katılın", gateNote: "Google Play, test sürümlerinin kurulumuna yalnızca Google grubumuzdaki kişiler için izin verir. Bir kez yapmanız yeterli." });
+Object.assign(I18N.tr, { pausedHint: "Bu uygulama duraklatıldı: sahibi 5 gündür kimsenin uygulamasını test etmedi.", pausedOwn: "Duraklatıldı: 5 gündür test yapmadınız. Hemen açmak için bir uygulama test edin.", nPausedSub: "Açmak için bir uygulama test edin" });

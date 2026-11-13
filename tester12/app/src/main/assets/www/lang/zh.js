@@ -349,3 +349,4 @@ Object.assign(I18N.zh, {
   nInstalled: "{n} 次安装"
 });
 Object.assign(I18N.zh, { gateTitle: "加入 Google 群组后才能测试", gateNote: "只有加入我们的 Google 群组，Google Play 才允许安装测试版。只需做一次。" });
+Object.assign(I18N.zh, { pausedHint: "此应用已暂停：作者已 5 天没有测试别人的应用。", pausedOwn: "已暂停：你已 5 天没有测试。测试 1 个应用即可立即恢复。", nPausedSub: "测试 1 个应用即可恢复" });

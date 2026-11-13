@@ -349,3 +349,4 @@ Object.assign(I18N.id, {
   nInstalled: "{n} terpasang"
 });
 Object.assign(I18N.id, { gateTitle: "Gabung grup Google untuk menguji", gateNote: "Google Play hanya mengizinkan pemasangan versi uji jika kamu ada di grup Google kami. Cukup dilakukan sekali." });
+Object.assign(I18N.id, { pausedHint: "Aplikasi ini dijeda: pemiliknya 5 hari tidak menguji aplikasi orang lain.", pausedOwn: "Dijeda: kamu 5 hari belum menguji. Uji satu aplikasi untuk langsung mengaktifkan lagi.", nPausedSub: "Uji satu aplikasi untuk mengaktifkan lagi" });

@@ -349,3 +349,4 @@ Object.assign(I18N.ar, {
   nInstalled: "{n} تثبيت"
 });
 Object.assign(I18N.ar, { gateTitle: "انضم إلى مجموعة Google للاختبار", gateNote: "لا يسمح Google Play بتثبيت نسخ الاختبار إلا إذا كنت في مجموعة Google الخاصة بنا. يلزم ذلك مرة واحدة فقط." });
+Object.assign(I18N.ar, { pausedHint: "هذا التطبيق متوقف: صاحبه لم يختبر أي تطبيق منذ 5 أيام.", pausedOwn: "متوقف: لم تختبر منذ 5 أيام. اختبر تطبيقًا واحدًا لإعادته فورًا.", nPausedSub: "اختبر تطبيقًا واحدًا لإعادة التشغيل" });

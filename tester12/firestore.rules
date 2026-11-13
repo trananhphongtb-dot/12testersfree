@@ -1,5 +1,5 @@
 rules_version = '2';
-// Quy tắc bảo mật cho 12 Testers Free (bản 3.1).
+// Quy tắc bảo mật cho 12 Testers Free (bản 3.4).
 // Dán toàn bộ vào Firebase Console > Firestore Database > Rules > Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -58,7 +58,7 @@ service cloud.firestore {
         // chủ app: sửa thông tin, ẩn/hiện, đồng bộ tên + số sao (không tự sửa số người test)
         (isOwner()
           && changed().hasOnly(['name', 'instr', 'icon', 'target', 'active', 'ownerName', 'ownerStars', 'issues', 'swapCount',
-                             'paused', 'pausedAt', 'ownerSeen', 'ver', 'upAt', 'done'])
+                             'paused', 'pausedAt', 'ownerSeen', 'ver', 'upAt', 'done', 'testedAt'])
           && validApp(request.resource.data)
           && (!('issues' in changed()) || request.resource.data.issues.size() == 0)
           && (!('swapCount' in changed()) || request.resource.data.swapCount == resource.data.get('swapCount', 0) + 1)

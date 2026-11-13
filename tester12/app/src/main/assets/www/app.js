@@ -508,6 +508,8 @@
     if (!force && S.apps && Date.now() - S.appsAt < 120000) return S.apps;
     const q = await db.collection("apps").orderBy("createdAt", "desc").limit(100).get();
     const list = []; q.forEach(d => list.push(Object.assign({ id: d.id }, d.data())));
+    // tạm dừng = chủ app quá IDLE_DAYS ngày chưa test app người khác (testedAt; app mới tính từ lúc đăng)
+    list.forEach(a => { const base = ms(a.testedAt) || ms(a.createdAt); a.paused = !!base && Date.now() - base > IDLE_DAYS * 86400000; });
     S.apps = list; S.appsAt = Date.now();
     if (A && A.markSeen) A.markSeen(String(Date.now()));
     return list;
@@ -522,6 +524,7 @@
     if (S.mine && !force) return S.mine;
     const q = await db.collection("apps").where("ownerUid", "==", S.user.uid).get();
     const list = []; q.forEach(d => list.push(Object.assign({ id: d.id }, d.data())));
+    list.forEach(a => { const base = ms(a.testedAt) || ms(a.createdAt); a.paused = !!base && Date.now() - base > IDLE_DAYS * 86400000; });
     list.sort((a, b) => ms(b.createdAt) - ms(a.createdAt));
     S.mine = list; return list;
   }
@@ -558,7 +561,7 @@
   const legend = () => `<div class="legend"><span class="a">${esc(t("stA"))}</span><span class="p">${esc(t("stP"))}</span><span class="r">${esc(t("stR"))}</span><span class="m">${esc(t("stM"))}</span></div>`;
 
   // ================================================================ 3.0 — dữ liệu & nhiệm vụ ngày
-  const MISSION = 12, STALE_DAYS = 15, UPD_GAP_DAYS = 7;
+  const MISSION = 12, STALE_DAYS = 15, UPD_GAP_DAYS = 7, IDLE_DAYS = 5;
   const verOf = pkg => { try { return A && A.versionOf ? (Number(A.versionOf(pkg)) || 0) : 0; } catch (e) { return 0; } };
   function stale(a) { const s = ms(a.ownerSeen); return !!s && Date.now() - s > STALE_DAYS * 86400000; }
   const jOf = a => (S.joined || {})[a.id];
@@ -610,49 +613,34 @@
   // ---- kiểm tra nhiệm vụ hôm qua: chưa đủ → tạm dừng 1 app / ngày bỏ lỡ (không cộng dồn nhiệm vụ)
   async function missionCheck() {
     if (!S.mine) return;
-    const tdy = today(), me = S.me, md = me.mdays || {};
+    const tdy = today(), me = S.me;
     const lastSeen = LS.get("seenAt_" + S.user.uid, 0);
     try {
       if (S.mine.length && Date.now() - lastSeen > 4 * 3600000) {
         const b = db.batch();
         S.mine.forEach(a => {
           const u = { ownerSeen: FV.serverTimestamp() };
+          if (S.apps && !availApps().length) u.testedAt = FV.serverTimestamp();
           const iv = verOf(a.pkg), src = A && A.installerOf ? A.installerOf(a.pkg) : "";
           if (iv > (a.ver || 0) && src === "com.android.vending") { u.ver = iv; a.ver = iv; }
           b.update(appRef(a.id), u);
         });
         await b.commit(); LS.set("seenAt_" + S.user.uid, Date.now());
       }
-      if (!me.chk) { await userRef().update({ chk: tdy }); me.chk = tdy; return; }
-      if (me.chk >= tdy) return;
-      const yest = addDays(tdy, -1), avail = Math.min(MISSION, availApps().length);
-      let missed = 0;
-      for (let d = me.chk, i = 0; d <= yest && i < 30; d = addDays(d, 1), i++) {
-        const e = md[d], need = e && e.t != null ? e.t : avail;
-        if (need > 0 && (!e || (e.n || 0) < need)) missed++;
-      }
-      const act = S.mine.filter(a => a.active !== false && !a.done && !a.paused).sort((x, y) => ms(x.createdAt) - ms(y.createdAt));
-      const pick = S.mine.length ? act.slice(0, missed) : [];
-      const b = db.batch();
-      pick.forEach(a => b.update(appRef(a.id), { paused: true, pausedAt: FV.serverTimestamp() }));
-      b.update(userRef(), { chk: tdy });
-      await b.commit();
-      me.chk = tdy; pick.forEach(a => { a.paused = true; });
-      if (pick.length) {
-        S.apps = null;
-        sheet(`<h2>⏸ ${esc(t("pausedTitle"))}</h2><p class="sub" style="margin-top:0">${esc(t("pausedBody", { n: Math.min(MISSION, avail) }))}</p>
-          ${pick.map(a => `<div class="row" style="margin:8px 0">${iconHtml(a, "s")}<b class="grow ell">${esc(a.name)}</b></div>`).join("")}
-          <button class="btn block" data-close>${esc(t("gotIt"))}</button>`, el => $("[data-close]", el).onclick = closeTop);
-      }
+      if (me.chk !== tdy) { await userRef().update({ chk: tdy }); me.chk = tdy; }
     } catch (e) { console.error(e); }
   }
-  async function unpauseMine() {
-    const ps = (S.mine || []).filter(a => a.paused);
-    if (!ps.length) return;
+  // chủ app vừa test app người khác → ghi mốc hoạt động lên các app của mình (hết tạm dừng)
+  async function touchOwn() {
+    const mine = (S.mine || []).filter(a => !a.done);
+    if (!mine.length) return;
     try {
-      const b = db.batch(); ps.forEach(a => b.update(appRef(a.id), { paused: false })); await b.commit();
-      ps.forEach(a => { a.paused = false; }); S.apps = null; toast(t("unpausedOk"));
-    } catch (e) {}
+      const b = db.batch(); mine.forEach(a => b.update(appRef(a.id), { testedAt: FV.serverTimestamp() })); await b.commit();
+      const was = mine.some(a => a.paused);
+      mine.forEach(a => { a.testedAt = new Date(); a.paused = false; });
+      (S.apps || []).forEach(a => { if (a.ownerUid === S.user.uid && !a.done) { a.testedAt = new Date(); a.paused = false; } });
+      if (was) toast(t("unpausedOk"));
+    } catch (e) { console.error(e); }
   }
   // chủ app từ chối ngày test → người test bị trừ 5⭐ (tự trừ khi mở app)
   async function reconcileRejects() {
@@ -953,7 +941,7 @@
       delete proofs[a.id];
       reportVersion(a, iv);
       const completed = nBefore < tBefore && missionN() >= missionT();
-      if (completed) unpauseMine();
+      touchOwn();
       pushMission();
       afterTest(a, stars, bonus, completed);
     } catch (e) { busy(btn, false); toast(failMsg(e)); }

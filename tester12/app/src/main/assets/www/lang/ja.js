@@ -349,3 +349,4 @@ Object.assign(I18N.ja, {
   nInstalled: "インストール {n}"
 });
 Object.assign(I18N.ja, { gateTitle: "テストするには Google グループに参加", gateNote: "Google Play のテスト版は、当グループのメンバーだけがインストールできます。一度だけ行えば十分です。" });
+Object.assign(I18N.ja, { pausedHint: "このアプリは一時停止中：作者が5日間、他のアプリをテストしていません。", pausedOwn: "一時停止中：5日間テストしていません。1つテストすればすぐ再開します。", nPausedSub: "1つテストすると再開します" });

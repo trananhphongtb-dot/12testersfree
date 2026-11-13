@@ -349,3 +349,4 @@ Object.assign(I18N.ko, {
   nInstalled: "설치 {n}"
 });
 Object.assign(I18N.ko, { gateTitle: "테스트하려면 Google 그룹에 가입하세요", gateNote: "Google Play는 저희 Google 그룹 회원만 테스트 버전을 설치할 수 있게 합니다. 한 번만 하면 됩니다." });
+Object.assign(I18N.ko, { pausedHint: "이 앱은 일시 중지됨: 작성자가 5일 동안 다른 앱을 테스트하지 않았습니다.", pausedOwn: "일시 중지됨: 5일간 테스트하지 않았습니다. 앱 하나를 테스트하면 바로 다시 켜집니다.", nPausedSub: "앱 하나를 테스트하면 다시 켜집니다" });
