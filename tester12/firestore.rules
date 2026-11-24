@@ -175,8 +175,9 @@ service cloud.firestore {
         && str(request.resource.data.appName, 50)
         && request.resource.data.ownerUid in request.resource.data.participants;
       allow update: if signedIn() && me() in resource.data.participants
-        && changed().hasOnly(['lastMsg', 'updatedAt'])
-        && str(request.resource.data.lastMsg, 200);
+        && changed().hasOnly(['lastMsg', 'updatedAt', 'lastFrom'])
+        && str(request.resource.data.lastMsg, 200)
+        && (!('lastFrom' in changed()) || request.resource.data.lastFrom == me());
       allow delete: if signedIn() && me() in resource.data.participants;
 
       match /messages/{mid} {
@@ -187,6 +188,14 @@ service cloud.firestore {
           && str(request.resource.data.text, 1000);
         allow delete: if signedIn() && me() in chatParts();
       }
+    }
+
+    // ---------- cấu hình chung: bản mới nhất để báo cập nhật khi mở app ----------
+    // Phong tạo/sửa document config/app trên Firestore:
+    // { latestVersionCode: 13, latestVersionName: "3.5.0",
+    //   updateUrl: "https://play.google.com/store/apps/details?id=vn.tester12.free" }
+    match /config/{doc} {
+      allow read: if signedIn();
     }
 
     // ---------- báo cáo vi phạm (chỉ anh xem trong Firebase Console) ----------
