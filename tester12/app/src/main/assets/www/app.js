@@ -190,7 +190,7 @@
   window.onAndroidResume = function () {
     if (backFromApp()) return;
     if (curTest && curTest.pg.isConnected) { curTest.paint(); return; }
-    if (S.user && S.me && !stack.length && (S.tab === "test" || S.tab === "tasks")) renderTab();
+    if (S.user && S.me && !stack.length && (S.tab === "test" || S.tab === "chat")) renderTab();
   };
   document.addEventListener("visibilitychange", () => { if (!document.hidden) backFromApp(); });
 
@@ -219,7 +219,9 @@
     market: '<path d="M4 9l1.5-5h13L20 9M4 9h16v11H4zM4 9c0 2 3.5 2 4 0 .5 2 3.5 2 4 0 .5 2 3.5 2 4 0 .5 2 4 2 4 0M10 20v-5h4v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
     flask: '<path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3M7 15h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
     tasks: '<rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 12.5l2.7 2.7L16 9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
-    user: '<circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+    user: '<circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    chat: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 01-12.4 7.5L3 21l2-5.6A8.5 8.5 0 1121 11.5z"/></svg>',
+    chatP: '<path d="M21 11.5a8.5 8.5 0 01-12.4 7.5L3 21l2-5.6A8.5 8.5 0 1121 11.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'
   };
   const starTxt = n => `<span class="star">${IC.star}</span><b>${n || 0}</b>`;
 
@@ -253,7 +255,7 @@
   }
 
   // ================================================================ state
-  const S = { user: null, me: null, tab: "test", sub: "need", apps: null, appsAt: 0, joined: null, mine: null, mineT: {},
+  const S = { user: null, me: null, tab: "test", sub: "act", apps: null, appsAt: 0, joined: null, mine: null, mineT: {}, chats: null,
     openMine: null, q: "", rejs: [], shown: 15, moreFn: null };
   let auth, db, FV;
   let pendingName = "", skipOnboard = false;
@@ -303,7 +305,7 @@
     FV = firebase.firestore.FieldValue;
     auth.onAuthStateChanged(async u => {
       closeAll();
-      Object.assign(S, { user: u, me: null, apps: null, joined: null, mine: null, mineT: {}, tab: "test", sub: "need", openMine: null, q: "", rejs: [] });
+      Object.assign(S, { user: u, me: null, apps: null, joined: null, mine: null, mineT: {}, chats: null, tab: "test", sub: "act", openMine: null, q: "", rejs: [] });
       skipOnboard = false; SU = null;
       Object.keys(proofs).forEach(k => delete proofs[k]); away = null; curTest = null;
       if (!u) { renderAuth("login"); return; }
@@ -473,7 +475,7 @@
   }
 
   // ================================================================ shell
-  const TABS = [["test", "tabTest", IC.flask], ["tasks", "tabTasks", IC.tasks], ["mine", "tabMine", IC.market], ["me", "tabMe", IC.user]];
+  const TABS = [["test", "tabTest", IC.flask], ["mine", "tabMine", IC.market], ["chat", "tabChat", IC.chatP], ["me", "tabMe", IC.user]];
   function renderShell() {
     root.innerHTML = `<main id="main"></main>
       <nav class="tabs">${TABS.map(([id, k, svg]) =>
@@ -490,7 +492,7 @@
   function renderTab(opts) {
     const m = $("#main"); if (!m) return;
     if (S.tab === "test") return renderTest(m);
-    if (S.tab === "tasks") return renderTasks(m);
+    if (S.tab === "chat") return renderChat(m);
     if (S.tab === "mine") return renderMine(m);
     return renderMe(m);
   }
@@ -562,14 +564,30 @@
 
   // ================================================================ 3.0 — dữ liệu & nhiệm vụ ngày
   const MISSION = 12, STALE_DAYS = 15, UPD_GAP_DAYS = 7, IDLE_DAYS = 5;
+  // hạn test của 1 app: 14 ngày kể từ ngày đăng + 7 ngày cho mỗi lần gia hạn
+  const BASE_DAYS = 14, EXT_DAYS = 7, EXT_COST = 50;
+  const extCount = a => (a && a.extCount) || 0;
+  function deadlineStr(a) { const c = ms(a.createdAt); if (!c) return today(); return addDays(dstr(new Date(c)), BASE_DAYS + EXT_DAYS * extCount(a)); }
+  function daysLeft(a) { return diffDays(today(), deadlineStr(a)); }
+  function isExpired(a) { return !a.done && daysLeft(a) < 0; }
+  function stopReason(a) { return a.done ? t("stopPublic") : t("stopNotDone"); }
   const verOf = pkg => { try { return A && A.versionOf ? (Number(A.versionOf(pkg)) || 0) : 0; } catch (e) { return 0; } };
   function stale(a) { const s = ms(a.ownerSeen); return !!s && Date.now() - s > STALE_DAYS * 86400000; }
   const jOf = a => (S.joined || {})[a.id];
   const doneTodayJ = j => !!j && j.lastDay === today();
-  function testable(a) { return a.ownerUid !== S.user.uid && a.active !== false && !a.done && !stale(a); }
+  function testable(a) { return a.ownerUid !== S.user.uid && a.active !== false && !a.done && !stale(a) && !a.errored && !isExpired(a); }
   const availApps = () => (S.apps || []).filter(a => testable(a) && !a.paused);
   function missionN() { return Object.values(S.joined || {}).filter(doneTodayJ).length; }
-  function missionT() { return Math.min(MISSION, availApps().length); }
+  // chỉ tiêu ngày = số app đang có của chủ × 12 (chưa có app thì 12); lỡ 1 ngày +3 cho mỗi ngày lỡ (tính 7 ngày gần nhất)
+  function missedPenalty() {
+    const md = (S.me && S.me.mdays) || {}, keys = Object.keys(md); if (!keys.length) return 0;
+    const first = keys.sort()[0]; let miss = 0;
+    for (let i = 1; i <= 7; i++) { const d = addDays(today(), -i); if (d < first) break; const e = md[d]; if (!e) miss++; else if ((e.n || 0) < (e.t || 0)) miss++; }
+    return miss * 3;
+  }
+  function ownActiveCount() { return (S.mine || []).filter(a => !a.done && a.active !== false).length; }
+  function missionBase() { const n = ownActiveCount(); return n > 0 ? n * MISSION : MISSION; }
+  function missionT() { return Math.min(missionBase() + missedPenalty(), availApps().length); }
   function daysUp(a) { const c = ms(a.createdAt); return c ? Math.max(1, diffDays(dstr(new Date(c)), today()) + 1) : 1; }
   const hasIssue = a => issList(a).length >= 2;
 
@@ -684,21 +702,25 @@
   // tên hiển thị gọn như tên nhà phát hành: tối đa 2 từ cuối, 18 ký tự
   const shortName = n => { const w = String(n || "").trim().split(/\s+/).filter(Boolean); const r = (w.length > 2 ? w.slice(-2) : w).join(" "); return r.length > 18 ? r.slice(0, 17) + "…" : r; };
   const isOwn = a => a.ownerUid === S.user.uid;
-  const ownList = () => (S.apps || []).filter(a => isOwn(a) && a.active !== false && !a.done && !a.paused);
   const rank = a => { const j = jOf(a); return j ? (doneTodayJ(j) ? 2 : 1) : 3; };
   function cmpApps(x, y) {
     const rx = rank(x), ry = rank(y);
     if (rx !== ry) return rx - ry;
     if (hasIssue(x) !== hasIssue(y)) return hasIssue(x) ? 1 : -1;
+    // ưu tiên app mới đăng lên trước
+    const cx = ms(x.createdAt), cy = ms(y.createdAt);
+    if (cx !== cy) return cy - cx;
     if (rx === 1) { const a = String(jOf(x).lastDay || ""), b = String(jOf(y).lastDay || ""); return a < b ? -1 : a > b ? 1 : 0; }
-    if (rx === 3) return (x.testersCount || 0) - (y.testersCount || 0) || ms(y.createdAt) - ms(x.createdAt);
-    return 0;
+    return (x.testersCount || 0) - (y.testersCount || 0);
   }
   function listFor(sub) {
-    if (sub === "stop") return (S.apps || []).filter(a => a.paused && a.active !== false && !a.done && !stale(a));
-    return ownList().concat(availApps().sort(cmpApps));
+    if (sub === "err") return (S.apps || []).filter(a => a.errored && !a.done);
+    if (sub === "stop") return (S.apps || []).filter(a => {
+      if (a.done) return isOwn(a);
+      return !stale(a) && (a.paused || isExpired(a));
+    });
+    return availApps().sort(cmpApps);
   }
-  function openOwn(a) { if (A && A.openApp) A.openApp(a.pkg); else openUrl(playUrl(a.pkg)); }
 
   async function renderTest(m) {
     if (!S.apps) spin(m);
@@ -714,18 +736,21 @@
     if (!own) bd.push(td ? `<span class="b ok">✓ ${esc(t("bToday"))}</span>` : j ? `<span class="b wa">⏳ ${esc(t("bNotToday"))}</span>` : `<span class="b">${esc(t("bNever"))}</span>`);
     if (!own && us.has) bd.push(`<span class="b wa">⤓ ${esc(t("bUpd"))}</span>`);
     if (hasIssue(a)) bd.push(`<span class="b er">⚠ ${esc(t("bLink"))}</span>`);
+    if (a.errored) bd.push(`<span class="b er">⚠ ${esc(t("bError"))}</span>`);
+    if (isExpired(a)) bd.push(`<span class="b er">⏰ ${esc(t("expiredLbl"))}</span>`);
+    if (kind === "stop") bd.push(`<span class="b er">⛔ ${esc(stopReason(a))}</span>`);
     const go = own ? `<span class="go">${esc(t("openBtnOwn"))}</span>` : a.paused ? `<span class="go dn">⏸</span>`
       : td ? (us.has ? `<span class="go">⤓ +${ST.upd}⭐</span>` : `<span class="go dn">✓</span>`) : `<span class="go">+${ST.test}⭐</span>`;
     return `<div class="lrow ${own ? "own" : ""}" data-app="${esc(a.id)}">${iconHtml(a, "s")}
       <div class="g"><div class="nm ell">${esc(a.name)}<small>${esc(shortName(a.ownerName))}</small></div>
         <div class="bd">${bd.join("")}</div>
-        <div class="mt"><span>👥 ${esc(t("nInstalled", { n: a.testersCount || 0 }))}</span><span>📅 ${up}/14</span></div></div>${go}</div>`;
+        <div class="mt"><span>👥 ${esc(t("nInstalled", { n: a.testersCount || 0 }))}</span><span>📅 ${up}/${BASE_DAYS + EXT_DAYS * extCount(a)}</span><span>${daysLeft(a) >= 0 ? esc(t("daysLeft", { n: daysLeft(a) })) : esc(t("expiredLbl"))}</span></div></div>${go}</div>`;
   }
   function missionCard() {
     const n = missionN(), tt = missionT(), nxt = nextApp(""), l = Math.max(0, tt - n);
     const btn = `<button class="bigbtn" id="tnext" ${nxt ? "" : "disabled"}>▶ ${esc(t("btnTest"))}</button>`;
-    if (n === 0) return `<div class="mis solo"><div class="t" style="justify-content:center"><b>${esc(t("missionTitle"))}</b></div>${tt ? "" : `<small style="margin-top:6px">${esc(t("noNext"))}</small>`}${btn}</div>`;
-    return `<div class="mis"><div class="t"><b>${esc(t("missionTitle"))}</b><span class="n">${n}<span class="of">/${tt}</span></span></div>
+    if (n === 0) return `<div class="mis solo"><div class="t" style="justify-content:center"><b>${esc(t("testToday"))} 0/${tt}</b></div>${tt ? "" : `<small style="margin-top:6px">${esc(t("noNext"))}</small>`}${btn}</div>`;
+    return `<div class="mis"><div class="t"><b>${esc(t("testToday"))}</b><span class="n">${n}<span class="of">/${tt}</span></span></div>
       <div class="bar"><i style="width:${tt ? Math.min(100, n / tt * 100) : 100}%"></i></div>
       <small>${esc(l > 0 ? t("missionLeft", { l, t: tt }) : t("missionDone2"))}</small>${btn}</div>`;
   }
@@ -734,37 +759,17 @@
   }
   function rowTap(id) {
     const a = (S.apps || []).find(x => x.id === id); if (!a) return;
-    if (isOwn(a)) return openOwn(a);
+    if (a.errored) return toast(t("errAppHidden"));
     if (a.paused) return toast(t("pausedHint"));
+    if (isExpired(a)) return toast(t("expiredHint"));
     openTest(id);
   }
   function paintRows(m) {
-    const sub = S.sub === "stop" ? "stop" : "act", list = listFor(sub), box = $("#tlist", m); if (!box) return;
+    const sub = S.sub || "act", list = listFor(sub), box = $("#tlist", m); if (!box) return;
     box.innerHTML = list.length ? list.slice(0, S.shown).map(a => rowHtml(a, sub)).join("")
       : `<div class="empty"><div class="big">${sub === "act" ? "🎉" : "🫥"}</div><p>${esc(t(sub === "act" ? "noNeed" : "noneHere"))}</p></div>`;
     $$("[data-app]", box).forEach(el => el.onclick = () => rowTap(el.dataset.app));
     S.moreFn = S.shown < list.length ? () => { S.shown += PAGE; paintRows(m); } : null;
-  }
-  function paintTest(m) {
-    const sub = S.sub === "stop" ? "stop" : "act", nA = listFor("act").length, nS = listFor("stop").length;
-    S.shown = S.shown || PAGE;
-    m.innerHTML = `<div class="ph"><div class="grow"><h1>${esc(t("tabTest"))}</h1></div>${topRight()}</div>
-      ${missionCard()}
-      <div class="stabs"><button data-s="act" class="${sub === "act" ? "on" : ""}">${esc(t("tabActive"))} ${nA}</button>
-        <button data-s="stop" class="${sub === "stop" ? "on" : ""}">${esc(t("tabStopped"))} ${nS}</button></div>
-      <div id="tlist"></div>`;
-    bindMission(m);
-    $$("[data-s]", m).forEach(b => b.onclick = () => { S.sub = b.dataset.s; S.shown = PAGE; paintTest(m); });
-    paintRows(m);
-  }
-
-  // ---- tab Nhiệm vụ: tiến độ hôm nay + lịch sử test
-  async function renderTasks(m) {
-    if (!S.apps) spin(m);
-    try { await Promise.all([loadApps(), loadJoined(), S.mine ? null : loadMine()]); }
-    catch (e) { console.error(e); return failBox(m, () => renderTasks(m)); }
-    if (S.tab !== "tasks") return;
-    paintTasks(m); pushMission(); refreshDot();
   }
   function histRow(j) {
     return `<div class="lrow" data-hist="${esc(j.id)}">${iconHtml(j, "s")}
@@ -772,22 +777,29 @@
         <div class="mt"><span>🔁 ${esc(t("nTimes", { n: j.days || 1 }))}</span><span>📅 ${esc(t("lastTest", { d: j.lastDay || "" }))}</span></div></div>
       ${doneTodayJ(j) ? `<span class="go dn">✓</span>` : ""}</div>`;
   }
-  function fillHist(m) {
+  function histHtml() {
     const js = Object.values(S.joined || {});
     const td = js.filter(doneTodayJ).sort((a, b) => String(a.name).localeCompare(String(b.name)));
     const ev = js.filter(j => !doneTodayJ(j)).sort((a, b) => String(b.lastDay || "") > String(a.lastDay || "") ? 1 : -1);
-    let left = S.shown, html = "";
-    const part = (title, arr) => { if (!arr.length || left <= 0) return; html += `<div class="sec3">${esc(title)} · ${arr.length}</div>`; arr.slice(0, left).forEach(j => html += histRow(j)); left -= arr.length; };
-    part(t("histToday"), td); part(t("histEver"), ev);
-    const box = $("#hlist", m);
-    box.innerHTML = html || `<div class="empty"><div class="big">🫥</div><p>${esc(t("noneHere"))}</p></div>`;
-    $$("[data-hist]", box).forEach(el => el.onclick = () => { const id = el.dataset.hist; (S.apps || []).some(a => a.id === id) ? openTest(id) : toast(t("goneHint")); });
-    S.moreFn = S.shown < td.length + ev.length ? () => { S.shown += PAGE; fillHist(m); } : null;
+    if (!td.length && !ev.length) return "";
+    return `<div class="sec3">${esc(t("histToday"))} · ${td.length}</div>` + td.slice(0, 10).map(histRow).join("")
+      + `<div class="sec3">${esc(t("histEver"))} · ${ev.length}</div>` + ev.slice(0, 10).map(histRow).join("");
   }
-  function paintTasks(m) {
+  function paintTest(m) {
+    const sub = ["act", "err", "stop"].includes(S.sub) ? S.sub : "act";
+    S.sub = sub;
+    const nA = listFor("act").length, nE = listFor("err").length, nS = listFor("stop").length;
     S.shown = S.shown || PAGE;
-    m.innerHTML = `<div class="ph"><div class="grow"><h1>${esc(t("tabTasks"))}</h1></div>${topRight()}</div>${missionCard()}<div id="hlist"></div>`;
-    bindMission(m); fillHist(m);
+    m.innerHTML = `<div class="ph"><div class="grow"><h1>${esc(t("tabTest"))}</h1></div>${topRight()}</div>
+      ${missionCard()}
+      <div class="stabs"><button data-s="act" class="${sub === "act" ? "on" : ""}">${esc(t("tabActive"))} ${nA}</button>
+        <button data-s="err" class="${sub === "err" ? "on" : ""}">${esc(t("tabError"))} ${nE}</button>
+        <button data-s="stop" class="${sub === "stop" ? "on" : ""}">${esc(t("tabStopped"))} ${nS}</button></div>
+      <div id="tlist"></div>${histHtml()}`;
+    bindMission(m);
+    $$("[data-s]", m).forEach(b => b.onclick = () => { S.sub = b.dataset.s; S.shown = PAGE; paintTest(m); });
+    paintRows(m);
+    $$("[data-hist]", m).forEach(el => el.onclick = () => { const id = el.dataset.hist; (S.apps || []).some(a => a.id === id) ? openTest(id) : toast(t("goneHint")); });
   }
 
   // ================================================================ Trang test 1 app (4 bước, nút luôn sáng)
@@ -834,7 +846,7 @@
     const iss = (a.issues || {})[S.user.uid];
     const head = `<div class="card" style="padding:12px">
       <div class="row">${iconHtml(a)}<div class="grow"><div class="title ell">${esc(a.name)}</div><div class="sub ell">${esc(a.pkg)} · ${esc(shortName(a.ownerName))}</div></div>
-        <div class="iconbtns"><button class="ibtn" data-x="share">${IC.share}</button><button class="ibtn r" data-x="report">${IC.flag}</button></div></div>
+        <div class="iconbtns"><button class="ibtn" data-x="share">${IC.share}</button>${a.ownerUid === S.user.uid ? "" : `<button class="ibtn" data-x="chat">${IC.chat}</button>`}<button class="ibtn r" data-x="report">${IC.flag}</button></div></div>
       <div class="st3"><div><b>${a.testersCount || 0}/${a.target || 12}</b><small>${esc(t("stInstalledS"))}</small></div>
         <div><b>${daysUp(a)}/14</b><small>${esc(t("stAppDays"))}</small></div>
         <div><b>${j ? (j.days || 1) : 0}</b><small>${esc(t("stYourDays"))}</small></div></div></div>
@@ -880,6 +892,7 @@
       ev.stopPropagation();
       const k = b.dataset.x;
       if (k === "share") { const txt = t("shareText", { name: a.name }) + "\n" + optinUrl(a.pkg); if (A) A.share(txt); else copyText(txt).then(() => toast(t("copied"))); }
+      else if (k === "chat") openChatForApp(a);
       else if (k === "report") report({ type: "app", appId: a.id });
       else if (k === "gplay") openUrl(optinUrl(a.pkg));
       else if (k === "upd") openUrl(playUrl(a.pkg));
@@ -971,9 +984,10 @@
         <div class="bigstar">⭐ +${stars}</div>
         <div class="sub" style="margin-top:2px">${esc(bonus ? t("popBonus", { p: bonus }) : t("popSaved"))}</div>
         <div style="font-weight:800;font-size:17px;margin:12px 0 2px">${esc(completed ? t("popMissionDone") : t("popProgress", { n, t: tt }))}</div>
+        ${completed ? `<div class="sub" style="margin:6px 0 2px">${esc(t("testMoreAsk"))}</div>` : ""}
         ${nxt ? `<div class="lbl">${esc(t("nextApp"))}</div>
           <div class="row" style="justify-content:center;margin-bottom:12px">${iconHtml(nxt, "s")}<div style="text-align:left"><b>${esc(nxt.name)}</b><div class="sub">${esc(shortName(nxt.ownerName))}</div></div></div>
-          <button class="btn bl block" data-n="go">▶ ${esc(t("testNext"))}</button>` : ""}
+          <button class="btn bl block" data-n="go">▶ ${esc(completed ? t("testMoreYes") : t("testNext"))}</button>` : ""}
         <button class="btn ghost block" data-n="x" style="margin-top:8px">${esc(nxt ? t("later") : t("close"))}</button></div>`, el => {
       $("[data-n=x]", el).onclick = closeTop;
       const g = $("[data-n=go]", el); if (g) g.onclick = () => { closeTop(); openTest(nxt.id); };
@@ -988,8 +1002,8 @@
         const r = b.dataset.r, v = { r, n: S.me.name, at: Date.now() };
         busy(b, true);
         try {
-          await appRef(a.id).update({ ["issues." + S.user.uid]: v });
-          a.issues = Object.assign({}, a.issues, { [S.user.uid]: v });
+          await appRef(a.id).update({ ["issues." + S.user.uid]: v, errored: true });
+          a.issues = Object.assign({}, a.issues, { [S.user.uid]: v }); a.errored = true;
           closeTop(); toast(t("issSentToast")); repaint();
           if (r === "issElig") eligSheet();
         } catch (e) { busy(b, false); toast(failMsg(e)); }
@@ -1039,7 +1053,8 @@
       <b>⚠ ${esc(t("issOwnerTitle", { n: L.length }))}</b>
       ${ISS.filter(r => by[r]).map(r => `<div class="issrow"><span class="tag r">${by[r]}</span><div><b>${esc(t(r))}</b><small>${esc(t(ISS_FIX[r]))}</small></div></div>`).join("")}
       <div class="btns"><button class="btn ghost small" data-iss="console" data-id="${esc(a.id)}">${IC.ext} ${esc(t("goConsole"))}</button>
-        <button class="btn green small" data-iss="fixed" data-id="${esc(a.id)}">✓ ${esc(t("issFixed"))}</button></div></div>`;
+        <button class="btn green small" data-iss="fixed" data-id="${esc(a.id)}">✓ ${esc(t("issFixed"))}</button>
+        <button class="btn bl small" data-iss="reload" data-id="${esc(a.id)}">↻ ${esc(t("reloadApp"))}</button></div></div>`;
   }
   // ================================================================ TAB: App của tôi (không giới hạn số app)
   const okDays = ts => ts.filter(x => (x.joinDay || "9999") <= addDays(today(), -13)).length;
@@ -1083,8 +1098,9 @@
       if (b.dataset.iss === "console") return openUrl(CONSOLE_URL);
       busy(b, true);
       try {
-        await appRef(b.dataset.id).update({ issues: {} });
-        const a = S.mine.find(x => x.id === b.dataset.id); if (a) a.issues = {};
+        await appRef(b.dataset.id).update({ issues: {}, errored: false });
+        const a = S.mine.find(x => x.id === b.dataset.id); if (a) { a.issues = {}; a.errored = false; }
+        const sa = (S.apps || []).find(x => x.id === b.dataset.id); if (sa) sa.errored = false;
         toast(t("issCleared")); paintMine(m);
       } catch (e) { busy(b, false); toast(failMsg(e)); }
     });
@@ -1104,11 +1120,13 @@
     const open = S.openMine === a.id;
     const chips = [`<span class="chip">👥 ${n}/${target}</span>`, `<span class="chip ${od >= target ? "w" : ""}">🏁 ${esc(t("fullDays", { a: od, b: target }))}</span>`];
     if (a.paused) chips.unshift(`<span class="chip wa">⏸ ${esc(t("bPaused"))}</span>`);
+    if (isExpired(a)) chips.unshift(`<span class="chip wa">⏰ ${esc(t("expiredLbl"))}</span>`);
+    chips.push(`<span class="chip">${daysLeft(a) >= 0 ? esc(t("daysLeft", { n: daysLeft(a) })) : esc(t("expiredLbl"))}</span>`);
     if (a.active === false) chips.unshift(`<span class="chip">${esc(t("hidden"))}</span>`);
     return `<div class="mc ${open ? "open" : ""}" data-mine="${esc(a.id)}">
       <div class="row">${iconHtml(a, "s")}<div class="grow"><div class="nm ell">${esc(a.name)}</div>
         <div class="chips">${chips.join("")}</div></div>${pend ? `<span class="badge">${esc(t("pendingN", { n: pend }))}</span>` : ""}</div>
-      ${a.paused ? `<div class="issme" style="margin-top:8px">⏸ ${esc(t("pausedOwn", { n: MISSION }))}</div>` : ""}
+      ${a.paused ? `<div class="issme" style="margin-top:8px">⏸ ${esc(t("pausedOwn", { n: missionT() }))}</div>` : ""}
       ${issBoxHtml(a)}
       ${open ? `<div class="xp" data-stop>${mineExpandedHtml(a, ts)}</div>` : ""}
     </div>`;
@@ -1120,7 +1138,8 @@
       <div class="sec3" ${pend ? "" : 'style="margin-top:0"'}>${esc(t("testersList"))} (${ts.length})</div>
       ${ts.length ? ts.map(x => `<div class="trow"><div class="avatar">${esc((x.name || "?")[0].toUpperCase())}</div><b class="ell">${esc(x.name)}</b>
         <span class="sub">${esc(t("nDays", { n: Object.keys(x.sub || {}).length }))}</span></div>`).join("") : `<p class="sub" style="margin:0">${esc(t("noTesters"))}</p>`}
-      <div class="mbtns"><button class="btn bl small" data-act="upd">⤓ ${esc(t("ownerUpd"))}</button>
+      <div class="mbtns"><button class="btn ghost small" data-act="extend">⏳ ${esc(t("extendBtn"))} · ${EXT_COST}⭐</button>
+        <button class="btn bl small" data-act="upd">⤓ ${esc(t("ownerUpd"))}</button>
         <button class="btn ghost small" data-act="done">🏁 ${esc(t("ownerDone"))}</button>
         <button class="btn ghost small" data-act="more">⋯ ${esc(t("moreBtn"))}</button></div>`;
   }
@@ -1135,6 +1154,17 @@
       if (gap > 0) return toast(t("ownerUpdWait", { d: gap }));
       if (!(await ask(t("ownerUpdAsk", { p: ST.upd }), t("ownerUpd")))) return;
       try { await appRef(a.id).update({ upAt: FV.serverTimestamp() }); a.upAt = new Date(); S.apps = null; toast(t("ownerUpdOk")); } catch (e) { toast(failMsg(e)); }
+    } else if (k === "extend") {
+      if ((S.me.stars || 0) < EXT_COST) return toast(t("extendNeed", { c: EXT_COST }));
+      if (!(await ask(t("extendAsk", { c: EXT_COST }), t("extendBtn")))) return;
+      try {
+        const b = db.batch();
+        b.update(appRef(a.id), { extCount: FV.increment(1) });
+        b.update(userRef(), { stars: FV.increment(-EXT_COST) });
+        await b.commit();
+        a.extCount = (a.extCount || 0) + 1; S.me.stars -= EXT_COST;
+        toast(t("extendOk")); renderTab();
+      } catch (e) { toast(failMsg(e)); }
     } else if (k === "done") {
       if (!(await ask(t("ownerDoneAsk"), t("ownerDone")))) return;
       try { await appRef(a.id).update({ done: true }); S.apps = null; S.mine = null; S.openMine = null; renderTab(); } catch (e) { toast(failMsg(e)); }
@@ -1197,13 +1227,19 @@
     const items = [];
     if (!S.apps || !S.joined) return items;
     const n = missionN(), tt = missionT();
-    if (tt > 0 && n < tt) items.push({ hot: true, ic: "🎯", title: t("nMission", { n, t: tt }), sub: t("nMissionSub", { l: tt - n, s: (tt - n) * ST.test }), act: "test" });
+    if (tt > 0 && n < tt) {
+      const ownAct = (S.mine || []).filter(a => !a.done && a.active !== false);
+      const minLeft = ownAct.length ? Math.min.apply(null, ownAct.map(daysLeft)) : null;
+      const sub = t("nMissionSub", { l: tt - n, s: (tt - n) * ST.test }) + (minLeft != null ? " · " + t("daysLeftOwn", { d: minLeft }) : "");
+      items.push({ hot: true, ic: "🎯", title: t("nMission", { n, t: tt }), sub, act: "test" });
+    }
     (S.mine || []).forEach(a => {
       const pend = S.mineT && S.mineT[a.id] ? pendOf(a) : 0;
       if (pend) items.push({ hot: true, ic: "📝", title: t("nReview", { n: pend, name: a.name }), sub: t("nReviewSub"), act: "mine", open: a.id });
       const ni = issList(a).length;
       if (ni) items.push({ hot: true, ic: "⚠", title: t("nIssue", { n: ni, name: a.name }), sub: t("nIssueSub"), act: "mine", open: a.id });
-      if (a.paused) items.push({ hot: true, ic: "⏸", title: t("nPaused", { name: a.name }), sub: t("nPausedSub", { n: MISSION }), act: "test" });
+      if (a.errored) items.push({ hot: true, ic: "⚠", title: t("nError", { name: a.name }), sub: t("nErrorSub"), act: "mine", open: a.id });
+      if (a.paused) items.push({ hot: true, ic: "⏸", title: t("nPaused", { name: a.name }), sub: t("nPausedSub", { n: missionT() }), act: "test" });
     });
     (S.rejs || []).forEach(r => items.push({ hot: false, ic: "✗", title: t("nReject", { name: r.app, day: r.day }), sub: r.why }));
     const ups = availApps().filter(a => updState(a, jOf(a)).has).length;
@@ -1482,7 +1518,7 @@
             const b = db.batch();
             b.set(db.collection("apps").doc(), {
               ownerUid: S.user.uid, ownerName: shortName(S.me.name), ownerSeen: FV.serverTimestamp(),
-              name, pkg, icon, instr, target, mode: "community", active: true,
+              name, pkg, icon, instr, target, mode: "community", active: true, extCount: 0,
               testersCount: 0, feedbackCount: 0, createdAt: FV.serverTimestamp()
             });
             if (c2) b.update(userRef(), { stars: FV.increment(-c2) });
@@ -1613,6 +1649,61 @@
         };
       });
     });
+  }
+
+  // ================================================================ Chat 1-1 (tester <-> chủ app)
+  const chatRef = id => db.collection("chats").doc(id);
+  function chatIdFor(a, otherUid) { const uids = [S.user.uid, otherUid].sort(); return a.id + "_" + uids[0] + "_" + uids[1]; }
+  async function openChatForApp(a) {
+    if (a.ownerUid === S.user.uid) return;
+    const id = chatIdFor(a, a.ownerUid);
+    try {
+      const snap = await chatRef(id).get();
+      if (!snap.exists) await chatRef(id).set({ appId: a.id, appName: a.name, ownerUid: a.ownerUid, ownerName: a.ownerName || "",
+        participants: [S.user.uid, a.ownerUid], names: { [S.user.uid]: S.me.name, [a.ownerUid]: a.ownerName || "" },
+        lastMsg: "", updatedAt: FV.serverTimestamp() });
+    } catch (e) { toast(failMsg(e)); return; }
+    openChatPage(id, a);
+  }
+  function openChatPage(chatId, a) {
+    const pg = page(t("chatTitle"), `<div class="chatlog" id="clog"><div class="spinner"></div></div>
+      <div class="chatbox"><input id="cmsg" maxlength="1000" placeholder="${esc(t("chatPh"))}"><button class="btn bl" id="csend">${esc(t("chatSend"))}</button></div>`);
+    const log = $("#clog", pg);
+    const unsub = db.collection("chats").doc(chatId).collection("messages").orderBy("at").limit(100).onSnapshot(snap => {
+      if (!pg.isConnected) { unsub(); return; }
+      const rows = []; snap.forEach(d => rows.push(d.data()));
+      log.innerHTML = rows.length ? rows.map(m => `<div class="chatmsg ${m.from === S.user.uid ? "out" : "in"}"><div>${esc(m.text)}</div><small>${m.at ? hm(ms(m.at)) : ""}</small></div>`).join("")
+        : `<div class="empty"><p>${esc(t("chatEmpty"))}</p></div>`;
+      log.scrollTop = log.scrollHeight;
+    }, () => { log.innerHTML = `<div class="empty"><p>${esc(t("errNet"))}</p></div>`; });
+    const send = async () => {
+      const inp = $("#cmsg", pg); const text = inp.value.trim(); if (!text) return;
+      inp.value = "";
+      try {
+        const b = db.batch(), mr = chatRef(chatId).collection("messages").doc();
+        b.set(mr, { from: S.user.uid, text: text.slice(0, 1000), at: FV.serverTimestamp() });
+        b.update(chatRef(chatId), { lastMsg: text.slice(0, 200), updatedAt: FV.serverTimestamp() });
+        await b.commit();
+      } catch (e) { toast(failMsg(e)); }
+    };
+    $("#csend", pg).onclick = send;
+    $("#cmsg", pg).addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+  }
+  async function renderChat(m) {
+    spin(m);
+    try {
+      const q = await db.collection("chats").where("participants", "array-contains", S.user.uid).limit(50).get();
+      const list = []; q.forEach(d => list.push(Object.assign({ id: d.id }, d.data())));
+      list.sort((x, y) => ms(y.updatedAt) - ms(x.updatedAt));
+      if (S.tab !== "chat") return;
+      m.innerHTML = header(t("tabChat"), "", topRight()) + (list.length ? list.map(c => {
+        const other = c.participants.find(u => u !== S.user.uid);
+        const otherName = (c.names && c.names[other]) || (other === c.ownerUid ? c.ownerName : t("you"));
+        return `<div class="lrow" data-chat="${esc(c.id)}">${iconHtml({ name: c.appName, pkg: c.appId }, "s")}<div class="g"><div class="nm ell">${esc(c.appName)}<small>${esc(otherName)}</small></div><div class="mt"><span class="ell">${esc(c.lastMsg || t("chatEmpty"))}</span></div></div><span class="go">💬</span></div>`;
+      }).join("") : `<div class="empty"><div class="big">💬</div><p>${esc(t("noChats"))}</p></div>`);
+      $$("[data-chat]", m).forEach(el => el.onclick = () => { const c = list.find(x => x.id === el.dataset.chat); if (c) openChatPage(c.id, { id: c.appId, name: c.appName, ownerUid: c.ownerUid, ownerName: c.ownerName }); });
+      refreshDot();
+    } catch (e) { console.error(e); return failBox(m, () => renderChat(m)); }
   }
 
   // ================================================================ TAB 4: Cá nhân

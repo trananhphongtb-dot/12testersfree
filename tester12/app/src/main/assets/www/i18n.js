@@ -597,3 +597,33 @@ Object.assign(I18N.vi, { gateTitle: "Vào nhóm Google để test", gateNote: "G
 Object.assign(I18N.en, { gateTitle: "Join the Google group to test", gateNote: "Google Play only lets you install test builds if you are in our Google group. You only need to do this once. (Reviewers: this step needs a real Google Groups account.)" });
 Object.assign(I18N.vi, { pausedHint: "App này đang tạm dừng vì chủ app 5 ngày chưa test app của người khác.", pausedOwn: "App đang tạm dừng vì bạn 5 ngày chưa test. Test 1 app của người khác là chạy lại ngay.", nPausedSub: "Test 1 app của người khác để bật lại", unpausedOk: "Đã bật lại các app của bạn" });
 Object.assign(I18N.en, { pausedHint: "This app is paused because its owner hasn't tested anyone's app for 5 days.", pausedOwn: "Paused because you haven't tested for 5 days. Test one app to turn it back on right away.", nPausedSub: "Test one app to turn it back on", unpausedOk: "Your apps are back on" });
+
+/* ===== 3.5: nhiệm vụ theo số app, gia hạn, app lỗi, chat ===== */
+Object.assign(I18N.vi, {
+  tabChat: "Chat", tabError: "App lỗi",
+  bError: "Lỗi", errAppHidden: "App này đang bị lỗi, đã ẩn khỏi danh sách test.",
+  expiredLbl: "Hết hạn", expiredHint: "App này đã hết hạn test, chủ app cần gia hạn.",
+  stopNotDone: "Không hoàn thành", stopPublic: "Đã công khai",
+  extendBtn: "Gia hạn 7 ngày", extendAsk: "Gia hạn thêm 7 ngày cho app này, trừ {c}⭐?",
+  extendOk: "Đã gia hạn thêm 7 ngày.", extendNeed: "Gia hạn tốn {c}⭐, bạn chưa đủ sao.",
+  daysLeftOwn: "app của bạn còn {d} ngày",
+  nError: "App bị báo lỗi · {name}", nErrorSub: "App đã ẩn khỏi danh sách test, bấm Tải lại để cho test tiếp",
+  reloadApp: "Tải lại",
+  chatTitle: "Chat", chatPh: "Nhắn tin…", chatSend: "Gửi",
+  chatEmpty: "Chưa có tin nhắn nào.", noChats: "Chưa có cuộc chat nào. Bấm nút chat trong trang test của 1 app để nhắn cho chủ app.",
+  testMoreAsk: "Bạn có muốn test thêm không?", testMoreYes: "Test thêm"
+});
+Object.assign(I18N.en, {
+  tabChat: "Chat", tabError: "Error apps",
+  bError: "Error", errAppHidden: "This app has a reported issue and is hidden from the test list.",
+  expiredLbl: "Expired", expiredHint: "This app's testing time is over; the owner needs to extend it.",
+  stopNotDone: "Not completed", stopPublic: "Already public",
+  extendBtn: "Extend 7 days", extendAsk: "Extend this app by 7 days for {c}⭐?",
+  extendOk: "Extended by 7 days.", extendNeed: "Extending costs {c}⭐, you don't have enough stars.",
+  daysLeftOwn: "your apps have {d} day(s) left",
+  nError: "App reported broken · {name}", nErrorSub: "The app is hidden from the test list — tap Reload to put it back",
+  reloadApp: "Reload",
+  chatTitle: "Chat", chatPh: "Type a message…", chatSend: "Send",
+  chatEmpty: "No messages yet.", noChats: "No chats yet. Tap the chat button on an app's test page to message its owner.",
+  testMoreAsk: "Want to test more apps?", testMoreYes: "Test more"
+});
