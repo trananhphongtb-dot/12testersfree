@@ -31,3 +31,8 @@ window.STARS = {
 
 // Package của chính app này (nút "Đánh giá trên Google Play")
 window.OUR_PACKAGE = "vn.tester12.free";
+
+// Mã phiên bản của app (đồng bộ với versionCode trong app/build.gradle).
+// Khi mở app, app so sánh số này với latestVersionCode trong Firestore (config/app):
+// nếu có bản mới hơn thì hiện thông báo yêu cầu cập nhật ngay.
+window.APP_VERSION_CODE = 13;
