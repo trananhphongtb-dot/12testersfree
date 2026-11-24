@@ -479,12 +479,13 @@ main { padding: 12px 12px 100px; }
 
 /* chat 1-1 (bản 3.5) */
 .chatlog { display: flex; flex-direction: column; gap: 8px; padding: 6px 2px 12px; }
-.chatmsg { max-width: 82%; padding: 9px 12px; border-radius: 14px; font-size: 15px; line-height: 1.4; }
-.chatmsg small { display: block; font-size: 11px; opacity: .6; margin-top: 3px; }
-.chatmsg.out { align-self: flex-end; background: #1a73e8; color: #fff; border-bottom-right-radius: 4px; }
-.chatmsg.in { align-self: flex-start; background: var(--card2, #222); border-bottom-left-radius: 4px; }
+.chatmsg { max-width: 82%; padding: 9px 12px; border-radius: 14px; font-size: 15px; line-height: 1.4; color: #000; }
+.chatmsg small { display: block; font-size: 11px; color: #555; margin-top: 3px; }
+.chatmsg.out { align-self: flex-end; background: #fff; color: #000; border-bottom-right-radius: 4px; }
+.chatmsg.in { align-self: flex-start; background: #e8e8e8; color: #000; border-bottom-left-radius: 4px; }
 .chatbox { display: flex; gap: 8px; padding: 10px 0 4px; }
-.chatbox input { flex: 1; min-width: 0; }
+.chatbox input { flex: 1; min-width: 0; background: #fff; color: #000; }
+.chatbox input::placeholder { color: #888; }
 
 /* khung chat: 2 khung riêng, nội dung đẩy xuống đáy */
 .page.chatpg { display: flex; flex-direction: column; overflow: hidden; }
@@ -495,3 +496,7 @@ main { padding: 12px 12px 100px; }
 .chatlog > *:first-child { margin-top: auto; }
 .chatbox { flex: none; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
 .tcount { cursor: pointer; }
+
+/* tròn đỏ báo tin mới: góc trên-phải tab Chat + dấu đỏ ở người gửi tin mới */
+nav.tabs .chatbadge { position: absolute; top: 2px; right: calc(50% - 24px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; }
+.urdot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex: none; }
