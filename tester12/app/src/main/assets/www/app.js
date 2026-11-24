@@ -256,7 +256,7 @@
 
   // ================================================================ state
   const S = { user: null, me: null, tab: "test", sub: "act", apps: null, appsAt: 0, joined: null, mine: null, mineT: {}, chats: null,
-    openMine: null, q: "", rejs: [], shown: 15, moreFn: null };
+    openMine: null, q: "", rejs: [], shown: 15, moreFn: null, showTs: null };
   let auth, db, FV;
   let pendingName = "", skipOnboard = false;
 
@@ -305,7 +305,7 @@
     FV = firebase.firestore.FieldValue;
     auth.onAuthStateChanged(async u => {
       closeAll();
-      Object.assign(S, { user: u, me: null, apps: null, joined: null, mine: null, mineT: {}, chats: null, tab: "test", sub: "act", openMine: null, q: "", rejs: [] });
+      Object.assign(S, { user: u, me: null, apps: null, joined: null, mine: null, mineT: {}, chats: null, tab: "test", sub: "act", openMine: null, showTs: null, q: "", rejs: [] });
       skipOnboard = false; SU = null;
       Object.keys(proofs).forEach(k => delete proofs[k]); away = null; curTest = null;
       if (!u) { renderAuth("login"); return; }
@@ -784,9 +784,9 @@
     m.innerHTML = `<div class="ph"><div class="grow"><h1>${esc(t("tabTest"))}</h1></div>${topRight()}</div>
       ${missionCard()}
       <div class="stabs"><button data-s="act" class="${sub === "act" ? "on" : ""}">${esc(t("tabActive"))} ${nA}</button>
+        <button data-s="done" class="${sub === "done" ? "on" : ""}">${esc(t("tabDone"))} ${nD}</button>
         <button data-s="err" class="${sub === "err" ? "on" : ""}">${esc(t("tabError"))} ${nE}</button>
-        <button data-s="stop" class="${sub === "stop" ? "on" : ""}">${esc(t("tabStopped"))} ${nS}</button>
-        <button data-s="done" class="${sub === "done" ? "on" : ""}">${esc(t("tabDone"))} ${nD}</button></div>
+        <button data-s="stop" class="${sub === "stop" ? "on" : ""}">${esc(t("tabStopped"))} ${nS}</button></div>
       <div id="tlist"></div>`;
     bindMission(m);
     $$("[data-s]", m).forEach(b => b.onclick = () => { S.sub = b.dataset.s; S.shown = PAGE; paintTest(m); });
@@ -1123,10 +1123,13 @@
     </div>`;
   }
   function mineExpandedHtml(a, ts) {
-    const pend = pendOf(a), target = a.target || 12;
+    const pend = pendOf(a), target = a.target || 12, tsOpen = S.showTs === a.id;
     return `
       ${pend ? `<div class="sec3" style="margin-top:0">${esc(t("pendReports"))} (${pend})</div><div data-pend><div class="sub">${esc(t("loading"))}</div></div>` : ""}
-      <div class="trow"><div class="avatar">👥</div><b class="ell">${esc(t("testersCount", { n: ts.length, t: target }))}</b></div>
+      <div class="trow tcount" data-ts="1"><div class="avatar">👥</div><b class="ell">${esc(t("testersCount", { n: ts.length, t: target }))}</b><span class="sub">${tsOpen ? "▾" : "▸"}</span></div>
+      ${tsOpen ? `<div class="sec3">${esc(t("testersList"))} (${ts.length})</div>
+      ${ts.length ? ts.map(x => `<div class="trow"><div class="avatar">${esc((x.name || "?")[0].toUpperCase())}</div><b class="ell">${esc(x.name)}</b>
+        <span class="sub">${esc(t("nDays", { n: Object.keys(x.sub || {}).length }))}</span></div>`).join("") : `<p class="sub" style="margin:0">${esc(t("noTesters"))}</p>`}` : ""}
       <div class="mbtns"><button class="btn ghost small" data-act="extend">⏳ ${esc(t("extendBtn"))} · ${EXT_COST}⭐</button>
         <button class="btn bl small" data-act="upd">⤓ ${esc(t("ownerUpd"))}</button>
         <button class="btn ghost small" data-act="done">🏁 ${esc(t("ownerDone"))}</button>
@@ -1170,6 +1173,8 @@
   }
   async function bindMineExpanded(el, a) {
     const ts = S.mineT[a.id] || [];
+    const tc = $("[data-ts]", el);
+    if (tc) tc.onclick = () => { S.showTs = S.showTs === a.id ? null : a.id; const m = el.closest("#main"); if (m) paintMine(m); };
     $$("[data-act]", el).forEach(b => b.onclick = () => {
       const k = b.dataset.act;
       if (k !== "more") return mineAct(k, a, ts, b);
@@ -1659,8 +1664,9 @@
     openChatPage(id, a, a.ownerName || "");
   }
   function openChatPage(chatId, a, whoName) {
-    const pg = page(whoName || t("chatTitle"), `<div class="chatlog" id="clog"><div class="spinner"></div></div>
-      <div class="chatbox"><input id="cmsg" maxlength="1000" placeholder="${esc(t("chatPh"))}"><button class="btn bl" id="csend">${esc(t("chatSend"))}</button></div>`);
+    const pg = page(whoName || t("chatTitle"), `<div class="chatwrap"><div class="chatlog" id="clog"><div class="spinner"></div></div>
+      <div class="chatbox"><input id="cmsg" maxlength="1000" placeholder="${esc(t("chatPh"))}"><button class="btn bl" id="csend">${esc(t("chatSend"))}</button></div></div>`);
+    pg.classList.add("chatpg");
     const log = $("#clog", pg);
     const unsub = db.collection("chats").doc(chatId).collection("messages").orderBy("at").limit(100).onSnapshot(snap => {
       if (!pg.isConnected) { unsub(); return; }
