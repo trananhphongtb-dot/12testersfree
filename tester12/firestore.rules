@@ -1,5 +1,5 @@
 rules_version = '2';
-// Quy tắc bảo mật cho 12 Testers Free (bản 3.4).
+// Quy tắc bảo mật cho 12 Testers Free (bản 3.5).
 // Dán toàn bộ vào Firebase Console > Firestore Database > Rules > Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -22,7 +22,7 @@ service cloud.firestore {
         && str(request.resource.data.name, 40)
         && (!('stars' in changed()) || (
               request.resource.data.stars >= 0
-              && (request.resource.data.stars - resource.data.get('stars', 0)) in [2, 5, 10, 20, -5, -10]));
+              && (request.resource.data.stars - resource.data.get('stars', 0)) in [2, 5, 10, 20, -5, -10, -50]));
       allow delete: if signedIn() && me() == uid;
 
       match /joined/{appId} {
@@ -58,7 +58,9 @@ service cloud.firestore {
         // chủ app: sửa thông tin, ẩn/hiện, đồng bộ tên + số sao (không tự sửa số người test)
         (isOwner()
           && changed().hasOnly(['name', 'instr', 'icon', 'target', 'active', 'ownerName', 'ownerStars', 'issues', 'swapCount',
-                             'paused', 'pausedAt', 'ownerSeen', 'ver', 'upAt', 'done', 'testedAt'])
+                             'paused', 'pausedAt', 'ownerSeen', 'ver', 'upAt', 'done', 'testedAt', 'extCount', 'errored'])
+          && (!('extCount' in changed()) || request.resource.data.extCount == resource.data.get('extCount', 0) + 1)
+          && (!('errored' in changed()) || request.resource.data.errored == false)
           && validApp(request.resource.data)
           && (!('issues' in changed()) || request.resource.data.issues.size() == 0)
           && (!('swapCount' in changed()) || request.resource.data.swapCount == resource.data.get('swapCount', 0) + 1)
@@ -91,8 +93,9 @@ service cloud.firestore {
         ||
         // người test báo "không cài được" (chỉ sửa dòng của chính mình)
         (signedIn() && resource.data.ownerUid != me()
-          && changed().hasOnly(['issues'])
+          && changed().hasOnly(['issues', 'errored'])
           && request.resource.data.issues.diff(resource.data.get('issues', {})).affectedKeys().hasOnly([me()])
+          && (!('errored' in changed()) || request.resource.data.errored == true)
           && (!(me() in request.resource.data.issues)
               || request.resource.data.issues[me()].r in ['issLink', 'issCountry', 'issElig']));
 
@@ -160,6 +163,29 @@ service cloud.firestore {
           (resource.data.fromUid == me() && changed().hasOnly(['fromCounted'])
             && resource.data.status == 'accepted' && request.resource.data.fromCounted == true));
       allow delete: if signedIn() && (resource.data.fromUid == me() || resource.data.toUid == me());
+    }
+
+    // ---------- chat 1-1 (bản 3.5): chỉ 2 người trong participants đọc được ----------
+    match /chats/{chatId} {
+      allow read: if signedIn() && me() in resource.data.participants;
+      allow create: if signedIn() && me() in request.resource.data.participants
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants[0] != request.resource.data.participants[1]
+        && str(request.resource.data.appName, 50)
+        && request.resource.data.ownerUid in request.resource.data.participants;
+      allow update: if signedIn() && me() in resource.data.participants
+        && changed().hasOnly(['lastMsg', 'updatedAt'])
+        && str(request.resource.data.lastMsg, 200);
+      allow delete: if signedIn() && me() in resource.data.participants;
+
+      match /messages/{mid} {
+        function chatParts() { return get(/databases/$(database)/documents/chats/$(chatId)).data.participants; }
+        allow read: if signedIn() && me() in chatParts();
+        allow create: if signedIn() && me() in chatParts()
+          && request.resource.data.from == me()
+          && str(request.resource.data.text, 1000);
+        allow delete: if signedIn() && me() in chatParts();
+      }
     }
 
     // ---------- báo cáo vi phạm (chỉ anh xem trong Firebase Console) ----------
