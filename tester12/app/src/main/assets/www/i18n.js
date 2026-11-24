@@ -612,7 +612,9 @@ Object.assign(I18N.vi, {
   reloadApp: "Tải lại",
   chatTitle: "Chat", chatPh: "Nhắn tin…", chatSend: "Gửi",
   chatEmpty: "Chưa có tin nhắn nào.", noChats: "Chưa có cuộc chat nào. Bấm nút chat trong trang test của 1 app để nhắn cho chủ app.",
-  testMoreAsk: "Bạn có muốn test thêm không?", testMoreYes: "Test thêm"
+  testMoreAsk: "Bạn có muốn test thêm không?", testMoreYes: "Test thêm",
+  updTitle: "Có bản cập nhật mới", updText: "Đã có bản {v} trên Google Play. Cập nhật ngay để dùng các tính năng mới nhất nhé.",
+  updNow: "Cập nhật ngay", updLater: "Để sau"
 });
 Object.assign(I18N.en, {
   tabChat: "Chat", tabError: "Error apps", tabDone: "Tested",
@@ -627,5 +629,7 @@ Object.assign(I18N.en, {
   reloadApp: "Reload",
   chatTitle: "Chat", chatPh: "Type a message…", chatSend: "Send",
   chatEmpty: "No messages yet.", noChats: "No chats yet. Tap the chat button on an app's test page to message its owner.",
-  testMoreAsk: "Want to test more apps?", testMoreYes: "Test more"
+  testMoreAsk: "Want to test more apps?", testMoreYes: "Test more",
+  updTitle: "New update available", updText: "Version {v} is on Google Play. Update now to get the latest features.",
+  updNow: "Update now", updLater: "Later"
 });
