@@ -16,13 +16,13 @@ service cloud.firestore {
       allow create: if signedIn() && me() == uid
         && request.resource.data.stars == 0
         && str(request.resource.data.name, 40);
-      // Sao: +5 mỗi lần test (+5 cập nhật = +10), -5 khi báo cáo bị từ chối, -10 khi đăng thêm app.
+      // Sao: +5 mỗi lần test (+5 cập nhật = +10), -5 khi báo cáo bị từ chối, -10 khi đăng thêm app / gia hạn 7 ngày.
       allow update: if signedIn() && me() == uid
         && changed().hasOnly(['name', 'testerEmail', 'stars', 'lang', 'slots', 'mdays', 'chk', 'setup'])
         && str(request.resource.data.name, 40)
         && (!('stars' in changed()) || (
               request.resource.data.stars >= 0
-              && (request.resource.data.stars - resource.data.get('stars', 0)) in [2, 5, 10, 20, -5, -10, -50]));
+              && (request.resource.data.stars - resource.data.get('stars', 0)) in [2, 5, 10, 20, -5, -10]));
       allow delete: if signedIn() && me() == uid;
 
       match /joined/{appId} {
@@ -167,7 +167,8 @@ service cloud.firestore {
 
     // ---------- chat 1-1 (bản 3.5): chỉ 2 người trong participants đọc được ----------
     match /chats/{chatId} {
-      allow read: if signedIn() && me() in resource.data.participants;
+      // resource == null: cho phép get() kiểm tra chat chưa tồn tại (mở chat lần đầu)
+      allow read: if signedIn() && (resource == null || me() in resource.data.participants);
       allow create: if signedIn() && me() in request.resource.data.participants
         && request.resource.data.participants.size() == 2
         && request.resource.data.participants[0] != request.resource.data.participants[1]
