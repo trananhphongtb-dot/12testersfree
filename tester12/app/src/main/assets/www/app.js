@@ -259,6 +259,7 @@
     openMine: null, q: "", rejs: [], shown: 15, moreFn: null, showTs: null };
   let auth, db, FV;
   let pendingName = "", skipOnboard = false;
+  let chatUnsub = null; // listener live cho danh sách chat (tròn đỏ tin chưa đọc)
 
   // ================================================================ language
   const SUPPORTED = ["vi", "en", "hi", "id", "pt", "es", "fr", "de", "ru", "tr", "ar", "bn", "ur", "th", "ms", "fil", "zh", "ja", "ko", "it"];
@@ -305,6 +306,7 @@
     FV = firebase.firestore.FieldValue;
     auth.onAuthStateChanged(async u => {
       closeAll();
+      if (chatUnsub) { chatUnsub(); chatUnsub = null; }
       Object.assign(S, { user: u, me: null, apps: null, joined: null, mine: null, mineT: {}, chats: null, tab: "test", sub: "act", openMine: null, showTs: null, q: "", rejs: [] });
       skipOnboard = false; SU = null;
       Object.keys(proofs).forEach(k => delete proofs[k]); away = null; curTest = null;
@@ -313,7 +315,7 @@
       root.innerHTML = `<div class="spinner"></div>`;
       try {
         await loadMe(); await Promise.all([loadMine(), loadJoined(), loadApps()]);
-        await missionCheck(); setupNotify(); renderShell();
+        await missionCheck(); setupNotify(); renderShell(); startChatListener(); checkAppUpdate();
         loadMineTesters().then(refreshDot).catch(() => {}); reconcileRejects().then(refreshDot);
       }
       catch (e) {
@@ -1649,7 +1651,52 @@
     });
   }
 
+  // ================================================================ thông báo cập nhật ngay khi mở app
+  // Phong bật prompt bằng cách tạo/sửa document config/app trên Firestore:
+  // { latestVersionCode: <số, vd 13>, latestVersionName: "3.5.0",
+  //   updateUrl: "https://play.google.com/store/apps/details?id=vn.tester12.free" }
+  // Chưa có document, hoặc mạng lỗi -> im lặng, không hiện gì.
+  async function checkAppUpdate() {
+    try {
+      const s = await db.collection("config").doc("app").get();
+      if (!s.exists) return;
+      const d = s.data() || {};
+      if (!d.latestVersionCode || d.latestVersionCode <= (window.APP_VERSION_CODE || 0)) return;
+      sheet(`<h2>${esc(t("updTitle"))}</h2><p class="sub" style="margin-top:0">${esc(t("updText", { v: d.latestVersionName || d.latestVersionCode }))}</p>
+        <div class="btns"><button class="btn ghost" data-u="later">${esc(t("updLater"))}</button><button class="btn bl" data-u="now">${esc(t("updNow"))}</button></div>`, el => {
+        $("[data-u=later]", el).onclick = closeTop;
+        $("[data-u=now]", el).onclick = () => { closeTop(); openUrl(d.updateUrl || playUrl(window.OUR_PACKAGE || "vn.tester12.free")); };
+      });
+    } catch (e) { /* không có config / không có mạng: không hiện gì */ }
+  }
+
   // ================================================================ Chat 1-1 (tester <-> chủ app)
+  // Tin chưa đọc: tròn đỏ ở góc trên-phải tab Chat + dấu đỏ ở dòng người gửi tin mới.
+  // lastFrom = uid người gửi tin cuối (ghi khi gửi); đã đọc = đã mở cuộc chat đó sau tin cuối.
+  const chatReadKey = id => "chatRead_" + S.user.uid + "_" + id;
+  const chatReadAt = id => LS.get(chatReadKey(id), 0);
+  const isChatUnread = c => !!c.lastFrom && c.lastFrom !== S.user.uid && ms(c.updatedAt) > chatReadAt(c.id);
+  const unreadChatCount = () => (S.chats || []).filter(isChatUnread).length;
+  function refreshChatBadge() {
+    const n = unreadChatCount();
+    $$("nav.tabs button").forEach(b => {
+      if (b.dataset.tab !== "chat") return;
+      let i = $(".chatbadge", b);
+      if (n) { if (!i) { i = document.createElement("i"); i.className = "chatbadge"; b.appendChild(i); } i.textContent = n > 9 ? "9+" : String(n); }
+      else if (i) i.remove();
+    });
+  }
+  function startChatListener() {
+    if (chatUnsub) { chatUnsub(); chatUnsub = null; }
+    if (!S.user) return;
+    chatUnsub = db.collection("chats").where("participants", "array-contains", S.user.uid).onSnapshot(snap => {
+      const list = []; snap.forEach(d => list.push(Object.assign({ id: d.id }, d.data())));
+      list.sort((x, y) => ms(y.updatedAt) - ms(x.updatedAt));
+      S.chats = list;
+      refreshChatBadge();
+      if (S.tab === "chat" && !stack.length) renderTab();
+    }, () => {});
+  }
   const chatRef = id => db.collection("chats").doc(id);
   function chatIdFor(a, otherUid) { const uids = [S.user.uid, otherUid].sort(); return a.id + "_" + uids[0] + "_" + uids[1]; }
   async function openChatForApp(a) {
@@ -1664,6 +1711,8 @@
     openChatPage(id, a, a.ownerName || "");
   }
   function openChatPage(chatId, a, whoName) {
+    // mở cuộc chat = đã đọc tới thời điểm này -> tắt dấu đỏ của chat này
+    LS.set(chatReadKey(chatId), Date.now()); refreshChatBadge();
     const pg = page(whoName || t("chatTitle"), `<div class="chatwrap"><div class="chatlog" id="clog"><div class="spinner"></div></div>
       <div class="chatbox"><input id="cmsg" maxlength="1000" placeholder="${esc(t("chatPh"))}"><button class="btn bl" id="csend">${esc(t("chatSend"))}</button></div></div>`);
     pg.classList.add("chatpg");
@@ -1674,6 +1723,9 @@
       log.innerHTML = rows.length ? rows.map(m => `<div class="chatmsg ${m.from === S.user.uid ? "out" : "in"}"><div>${esc(m.text)}</div><small>${m.at ? hm(ms(m.at)) : ""}</small></div>`).join("")
         : `<div class="empty"><p>${esc(t("chatEmpty"))}</p></div>`;
       log.scrollTop = log.scrollHeight;
+      // đang mở chat mà đối phương nhắn tới: tính là đã đọc luôn, tắt dấu đỏ
+      const last = rows[rows.length - 1];
+      if (last && last.from !== S.user.uid) { LS.set(chatReadKey(chatId), Math.max(chatReadAt(chatId), ms(last.at) || Date.now())); refreshChatBadge(); }
     }, () => { log.innerHTML = `<div class="empty"><p>${esc(t("errNet"))}</p></div>`; });
     const send = async () => {
       const inp = $("#cmsg", pg); const text = inp.value.trim(); if (!text) return;
@@ -1682,7 +1734,7 @@
       try {
         const b = db.batch(), mr = chatRef(chatId).collection("messages").doc();
         b.set(mr, { from: S.user.uid, text: text.slice(0, 1000), at: FV.serverTimestamp() });
-        b.update(chatRef(chatId), { lastMsg: text.slice(0, 200), updatedAt: FV.serverTimestamp() });
+        b.update(chatRef(chatId), { lastMsg: text.slice(0, 200), updatedAt: FV.serverTimestamp(), lastFrom: S.user.uid });
         await b.commit();
       } catch (e) { toast(failMsg(e)); inp.value = text; } finally { btn.disabled = false; }
     };
@@ -1692,20 +1744,26 @@
   async function renderChat(m) {
     spin(m);
     try {
-      const q = await db.collection("chats").where("participants", "array-contains", S.user.uid).limit(50).get();
-      const list = []; q.forEach(d => list.push(Object.assign({ id: d.id }, d.data())));
-      list.sort((x, y) => ms(y.updatedAt) - ms(x.updatedAt));
+      // dùng danh sách live từ listener nếu có (để tròn đỏ cập nhật ngay), không thì lấy 1 lần
+      let list;
+      if (S.chats) list = S.chats.slice();
+      else {
+        const q = await db.collection("chats").where("participants", "array-contains", S.user.uid).limit(50).get();
+        list = []; q.forEach(d => list.push(Object.assign({ id: d.id }, d.data())));
+        list.sort((x, y) => ms(y.updatedAt) - ms(x.updatedAt));
+        S.chats = list;
+      }
       if (S.tab !== "chat") return;
       m.innerHTML = header(t("tabChat"), "", topRight()) + (list.length ? list.map(c => {
         const other = c.participants.find(u => u !== S.user.uid);
         const otherName = (c.names && c.names[other]) || (other === c.ownerUid ? c.ownerName : t("you"));
-        return `<div class="lrow" data-chat="${esc(c.id)}">${iconHtml({ name: c.appName, pkg: c.appId }, "s")}<div class="g"><div class="nm ell">${esc(otherName)}<small>${esc(c.appName)}</small></div><div class="mt"><span class="ell">${esc(c.lastMsg || t("chatEmpty"))}</span></div></div><span class="go">💬</span></div>`;
+        return `<div class="lrow" data-chat="${esc(c.id)}">${iconHtml({ name: c.appName, pkg: c.appId }, "s")}<div class="g"><div class="nm ell">${esc(otherName)}<small>${esc(c.appName)}</small></div><div class="mt"><span class="ell">${esc(c.lastMsg || t("chatEmpty"))}</span></div></div>${isChatUnread(c) ? `<span class="urdot"></span>` : ""}<span class="go">💬</span></div>`;
       }).join("") : `<div class="empty"><div class="big">💬</div><p>${esc(t("noChats"))}</p></div>`);
       $$("[data-chat]", m).forEach(el => el.onclick = () => { const c = list.find(x => x.id === el.dataset.chat); if (!c) return;
         const other = c.participants.find(u => u !== S.user.uid);
         const otherName = (c.names && c.names[other]) || (other === c.ownerUid ? c.ownerName : t("you"));
         openChatPage(c.id, { id: c.appId, name: c.appName, ownerUid: c.ownerUid, ownerName: c.ownerName }, otherName); });
-      refreshDot();
+      refreshDot(); refreshChatBadge();
     } catch (e) { console.error(e); return failBox(m, () => renderChat(m)); }
   }
 
