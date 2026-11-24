@@ -486,7 +486,7 @@ Object.assign(I18N.vi, {
   slotNeed: "Còn thiếu {n}⭐. Test thêm app để kiếm sao nhé.", goTest: "Đi test kiếm ⭐", slotOk: "Đã mở ô mới!",
   noSlot: "Hết ô đăng app. Hãy mở thêm ô bằng ⭐ hoặc bấm Hoàn thành một app.", finishedApps: "Đã hoàn thành",
   fullDays: "Đủ 14 ngày {a}/{b}", pausedOwn: "App đang tạm dừng vì hôm qua chưa đủ nhiệm vụ. Làm đủ {n} test hôm nay để bật lại.",
-  ownerUpd: "Đã cập nhật bản mới", ownerDone: "Hoàn thành", 
+  ownerUpd: "Đã cập nhật bản mới", ownerDone: "Công khai", 
   ownerUpdWait: "Mỗi app chỉ báo cập nhật 1 lần / 7 ngày. Còn {d} ngày.",
   ownerUpdAsk: "Báo người test là app có bản mới? Ai cập nhật lại sẽ được +{p}⭐.", ownerUpdOk: "Đã báo bản cập nhật mới.",
   ownerDoneAsk: "App đã qua kiểm thử? App sẽ rời danh sách test và trả lại ô đăng.",
@@ -538,7 +538,7 @@ Object.assign(I18N.en, {
   slotNeed: "{n}⭐ short. Test more apps to earn stars.", goTest: "Go earn ⭐", slotOk: "New slot unlocked!",
   noSlot: "No free slot. Unlock one with ⭐ or mark an app as finished.", finishedApps: "Finished",
   fullDays: "14 days {a}/{b}", pausedOwn: "Paused because yesterday's mission wasn't done. Do {n} tests today to turn it back on.",
-  ownerUpd: "New version released", ownerDone: "Finished",
+  ownerUpd: "New version released", ownerDone: "Go public",
   ownerUpdWait: "You can flag an update once every 7 days. {d} day(s) left.",
   ownerUpdAsk: "Tell testers there's a new version? Anyone who updates gets +{p}⭐.", ownerUpdOk: "Update flagged.",
   ownerDoneAsk: "App passed testing? It leaves the test list and frees your slot.",
@@ -569,7 +569,7 @@ Object.assign(I18N.vi, {
   bToday: "Đã test hôm nay", bNotToday: "Chưa test hôm nay", bNever: "Chưa test bao giờ",
   ownerBadge: "Của bạn", openBtnOwn: "Mở",
   histToday: "Đã test hôm nay", histEver: "Đã từng test", nTimes: "Đã test {n} lần", lastTest: "Gần nhất {d}", nDays: "{n} ngày",
-  pendReports: "Báo cáo chờ duyệt", moreBtn: "Thêm", ownerUpd: "Báo cập nhật mới", noMine: "Bạn chưa đăng app nào",
+  pendReports: "Báo cáo chờ duyệt", moreBtn: "Thêm", ownerUpd: "Cập nhật", noMine: "Bạn chưa đăng app nào",
   postCostNote: "App thứ 2 trở đi tốn {c}⭐ khi đăng (app đầu miễn phí).", postNeedTitle: "Chưa đủ sao",
   errNoStars: "Đăng thêm app tốn {c}⭐, bạn còn thiếu {n}⭐. Hãy test thêm app để kiếm sao."
 });
@@ -581,7 +581,7 @@ Object.assign(I18N.en, {
   bToday: "Tested today", bNotToday: "Not tested today", bNever: "Never tested",
   ownerBadge: "Yours", openBtnOwn: "Open",
   histToday: "Tested today", histEver: "Tested before", nTimes: "Tested {n}×", lastTest: "Last {d}", nDays: "{n} days",
-  pendReports: "Reports to review", moreBtn: "More", ownerUpd: "Report new update", noMine: "You haven't posted any app yet",
+  pendReports: "Reports to review", moreBtn: "More", ownerUpd: "Update", noMine: "You haven't posted any app yet",
   postCostNote: "Each app after the first costs {c}⭐ to post (first one is free).", postNeedTitle: "Not enough stars",
   errNoStars: "Posting another app costs {c}⭐ and you need {n}⭐ more. Test apps to earn stars."
 });
@@ -600,11 +600,12 @@ Object.assign(I18N.en, { pausedHint: "This app is paused because its owner hasn'
 
 /* ===== 3.5: nhiệm vụ theo số app, gia hạn, app lỗi, chat ===== */
 Object.assign(I18N.vi, {
-  tabChat: "Chat", tabError: "App lỗi",
+  tabChat: "Chat", tabError: "App lỗi", tabDone: "Đã test",
+  testersCount: "Người test: {n}/{t}",
   bError: "Lỗi", errAppHidden: "App này đang bị lỗi, đã ẩn khỏi danh sách test.",
   expiredLbl: "Hết hạn", expiredHint: "App này đã hết hạn test, chủ app cần gia hạn.",
   stopNotDone: "Không hoàn thành", stopPublic: "Đã công khai",
-  extendBtn: "Gia hạn 7 ngày", extendAsk: "Gia hạn thêm 7 ngày cho app này, trừ {c}⭐?",
+  extendBtn: "Gia hạn", extendAsk: "Gia hạn thêm 7 ngày cho app này, trừ {c}⭐?",
   extendOk: "Đã gia hạn thêm 7 ngày.", extendNeed: "Gia hạn tốn {c}⭐, bạn chưa đủ sao.",
   daysLeftOwn: "app của bạn còn {d} ngày",
   nError: "App bị báo lỗi · {name}", nErrorSub: "App đã ẩn khỏi danh sách test, bấm Tải lại để cho test tiếp",
@@ -614,11 +615,12 @@ Object.assign(I18N.vi, {
   testMoreAsk: "Bạn có muốn test thêm không?", testMoreYes: "Test thêm"
 });
 Object.assign(I18N.en, {
-  tabChat: "Chat", tabError: "Error apps",
+  tabChat: "Chat", tabError: "Error apps", tabDone: "Tested",
+  testersCount: "Testers: {n}/{t}",
   bError: "Error", errAppHidden: "This app has a reported issue and is hidden from the test list.",
   expiredLbl: "Expired", expiredHint: "This app's testing time is over; the owner needs to extend it.",
   stopNotDone: "Not completed", stopPublic: "Already public",
-  extendBtn: "Extend 7 days", extendAsk: "Extend this app by 7 days for {c}⭐?",
+  extendBtn: "Extend", extendAsk: "Extend this app by 7 days for {c}⭐?",
   extendOk: "Extended by 7 days.", extendNeed: "Extending costs {c}⭐, you don't have enough stars.",
   daysLeftOwn: "your apps have {d} day(s) left",
   nError: "App reported broken · {name}", nErrorSub: "The app is hidden from the test list — tap Reload to put it back",
