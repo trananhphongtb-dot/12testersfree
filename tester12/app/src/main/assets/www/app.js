@@ -565,7 +565,7 @@
   // ================================================================ 3.0 — dữ liệu & nhiệm vụ ngày
   const MISSION = 12, STALE_DAYS = 15, UPD_GAP_DAYS = 7, IDLE_DAYS = 5;
   // hạn test của 1 app: 14 ngày kể từ ngày đăng + 7 ngày cho mỗi lần gia hạn
-  const BASE_DAYS = 14, EXT_DAYS = 7, EXT_COST = 50;
+  const BASE_DAYS = 14, EXT_DAYS = 7, EXT_COST = 10;
   const extCount = a => (a && a.extCount) || 0;
   function deadlineStr(a) { const c = ms(a.createdAt); if (!c) return today(); return addDays(dstr(new Date(c)), BASE_DAYS + EXT_DAYS * extCount(a)); }
   function daysLeft(a) { return diffDays(today(), deadlineStr(a)); }
@@ -715,6 +715,11 @@
   }
   function listFor(sub) {
     if (sub === "err") return (S.apps || []).filter(a => a.errored && !a.done);
+    if (sub === "done") return (S.apps || []).filter(a => jOf(a)).sort((x, y) => {
+      const lx = String((jOf(x) || {}).lastDay || ""), ly = String((jOf(y) || {}).lastDay || "");
+      if (lx !== ly) return ly < lx ? -1 : 1;
+      return (ms(y.createdAt) || 0) - (ms(x.createdAt) || 0);
+    });
     if (sub === "stop") return (S.apps || []).filter(a => {
       if (a.done) return isOwn(a);
       return !stale(a) && (a.paused || isExpired(a));
@@ -771,35 +776,21 @@
     $$("[data-app]", box).forEach(el => el.onclick = () => rowTap(el.dataset.app));
     S.moreFn = S.shown < list.length ? () => { S.shown += PAGE; paintRows(m); } : null;
   }
-  function histRow(j) {
-    return `<div class="lrow" data-hist="${esc(j.id)}">${iconHtml(j, "s")}
-      <div class="g"><div class="nm ell">${esc(j.name)}<small>${esc(shortName(j.ownerName))}</small></div>
-        <div class="mt"><span>🔁 ${esc(t("nTimes", { n: j.days || 1 }))}</span><span>📅 ${esc(t("lastTest", { d: j.lastDay || "" }))}</span></div></div>
-      ${doneTodayJ(j) ? `<span class="go dn">✓</span>` : ""}</div>`;
-  }
-  function histHtml() {
-    const js = Object.values(S.joined || {});
-    const td = js.filter(doneTodayJ).sort((a, b) => String(a.name).localeCompare(String(b.name)));
-    const ev = js.filter(j => !doneTodayJ(j)).sort((a, b) => String(b.lastDay || "") > String(a.lastDay || "") ? 1 : -1);
-    if (!td.length && !ev.length) return "";
-    return `<div class="sec3">${esc(t("histToday"))} · ${td.length}</div>` + td.slice(0, 10).map(histRow).join("")
-      + `<div class="sec3">${esc(t("histEver"))} · ${ev.length}</div>` + ev.slice(0, 10).map(histRow).join("");
-  }
   function paintTest(m) {
-    const sub = ["act", "err", "stop"].includes(S.sub) ? S.sub : "act";
+    const sub = ["act", "err", "stop", "done"].includes(S.sub) ? S.sub : "act";
     S.sub = sub;
-    const nA = listFor("act").length, nE = listFor("err").length, nS = listFor("stop").length;
+    const nA = listFor("act").length, nE = listFor("err").length, nS = listFor("stop").length, nD = listFor("done").length;
     S.shown = S.shown || PAGE;
     m.innerHTML = `<div class="ph"><div class="grow"><h1>${esc(t("tabTest"))}</h1></div>${topRight()}</div>
       ${missionCard()}
       <div class="stabs"><button data-s="act" class="${sub === "act" ? "on" : ""}">${esc(t("tabActive"))} ${nA}</button>
         <button data-s="err" class="${sub === "err" ? "on" : ""}">${esc(t("tabError"))} ${nE}</button>
-        <button data-s="stop" class="${sub === "stop" ? "on" : ""}">${esc(t("tabStopped"))} ${nS}</button></div>
-      <div id="tlist"></div>${histHtml()}`;
+        <button data-s="stop" class="${sub === "stop" ? "on" : ""}">${esc(t("tabStopped"))} ${nS}</button>
+        <button data-s="done" class="${sub === "done" ? "on" : ""}">${esc(t("tabDone"))} ${nD}</button></div>
+      <div id="tlist"></div>`;
     bindMission(m);
     $$("[data-s]", m).forEach(b => b.onclick = () => { S.sub = b.dataset.s; S.shown = PAGE; paintTest(m); });
     paintRows(m);
-    $$("[data-hist]", m).forEach(el => el.onclick = () => { const id = el.dataset.hist; (S.apps || []).some(a => a.id === id) ? openTest(id) : toast(t("goneHint")); });
   }
 
   // ================================================================ Trang test 1 app (4 bước, nút luôn sáng)
@@ -1132,18 +1123,18 @@
     </div>`;
   }
   function mineExpandedHtml(a, ts) {
-    const pend = pendOf(a);
+    const pend = pendOf(a), target = a.target || 12;
     return `
       ${pend ? `<div class="sec3" style="margin-top:0">${esc(t("pendReports"))} (${pend})</div><div data-pend><div class="sub">${esc(t("loading"))}</div></div>` : ""}
-      <div class="sec3" ${pend ? "" : 'style="margin-top:0"'}>${esc(t("testersList"))} (${ts.length})</div>
-      ${ts.length ? ts.map(x => `<div class="trow"><div class="avatar">${esc((x.name || "?")[0].toUpperCase())}</div><b class="ell">${esc(x.name)}</b>
-        <span class="sub">${esc(t("nDays", { n: Object.keys(x.sub || {}).length }))}</span></div>`).join("") : `<p class="sub" style="margin:0">${esc(t("noTesters"))}</p>`}
+      <div class="trow"><div class="avatar">👥</div><b class="ell">${esc(t("testersCount", { n: ts.length, t: target }))}</b></div>
       <div class="mbtns"><button class="btn ghost small" data-act="extend">⏳ ${esc(t("extendBtn"))} · ${EXT_COST}⭐</button>
         <button class="btn bl small" data-act="upd">⤓ ${esc(t("ownerUpd"))}</button>
         <button class="btn ghost small" data-act="done">🏁 ${esc(t("ownerDone"))}</button>
         <button class="btn ghost small" data-act="more">⋯ ${esc(t("moreBtn"))}</button></div>`;
   }
-  async function mineAct(k, a, ts) {
+  // gia hạn: chặn bấm 2 lần trong lúc đang ghi (tránh trừ sao 2 lần)
+  const extBusy = new Set();
+  async function mineAct(k, a, ts, btn) {
     if (k === "copy") toast((await copyText(ts.map(x => x.email).filter(Boolean).join(", "))) ? t("copied") : t("errNet"));
     else if (k === "share") {
       const txt = t("shareText", { name: a.name }) + "\n" + optinUrl(a.pkg);
@@ -1156,7 +1147,9 @@
       try { await appRef(a.id).update({ upAt: FV.serverTimestamp() }); a.upAt = new Date(); S.apps = null; toast(t("ownerUpdOk")); } catch (e) { toast(failMsg(e)); }
     } else if (k === "extend") {
       if ((S.me.stars || 0) < EXT_COST) return toast(t("extendNeed", { c: EXT_COST }));
+      if (extBusy.has(a.id)) return;
       if (!(await ask(t("extendAsk", { c: EXT_COST }), t("extendBtn")))) return;
+      extBusy.add(a.id); busy(btn, true);
       try {
         const b = db.batch();
         b.update(appRef(a.id), { extCount: FV.increment(1) });
@@ -1164,7 +1157,7 @@
         await b.commit();
         a.extCount = (a.extCount || 0) + 1; S.me.stars -= EXT_COST;
         toast(t("extendOk")); renderTab();
-      } catch (e) { toast(failMsg(e)); }
+      } catch (e) { toast(failMsg(e)); } finally { extBusy.delete(a.id); busy(btn, false); }
     } else if (k === "done") {
       if (!(await ask(t("ownerDoneAsk"), t("ownerDone")))) return;
       try { await appRef(a.id).update({ done: true }); S.apps = null; S.mine = null; S.openMine = null; renderTab(); } catch (e) { toast(failMsg(e)); }
@@ -1179,7 +1172,7 @@
     const ts = S.mineT[a.id] || [];
     $$("[data-act]", el).forEach(b => b.onclick = () => {
       const k = b.dataset.act;
-      if (k !== "more") return mineAct(k, a, ts);
+      if (k !== "more") return mineAct(k, a, ts, b);
       sheet(`<h3>${esc(a.name)}</h3>
         ${ts.length ? `<button class="opt" data-mo="copy"><b>${esc(t("copyEmails"))}</b></button>` : ""}
         <button class="opt" data-mo="share"><b>${esc(t("share"))}</b></button>
@@ -1663,10 +1656,10 @@
         participants: [S.user.uid, a.ownerUid], names: { [S.user.uid]: S.me.name, [a.ownerUid]: a.ownerName || "" },
         lastMsg: "", updatedAt: FV.serverTimestamp() });
     } catch (e) { toast(failMsg(e)); return; }
-    openChatPage(id, a);
+    openChatPage(id, a, a.ownerName || "");
   }
-  function openChatPage(chatId, a) {
-    const pg = page(t("chatTitle"), `<div class="chatlog" id="clog"><div class="spinner"></div></div>
+  function openChatPage(chatId, a, whoName) {
+    const pg = page(whoName || t("chatTitle"), `<div class="chatlog" id="clog"><div class="spinner"></div></div>
       <div class="chatbox"><input id="cmsg" maxlength="1000" placeholder="${esc(t("chatPh"))}"><button class="btn bl" id="csend">${esc(t("chatSend"))}</button></div>`);
     const log = $("#clog", pg);
     const unsub = db.collection("chats").doc(chatId).collection("messages").orderBy("at").limit(100).onSnapshot(snap => {
@@ -1678,13 +1671,14 @@
     }, () => { log.innerHTML = `<div class="empty"><p>${esc(t("errNet"))}</p></div>`; });
     const send = async () => {
       const inp = $("#cmsg", pg); const text = inp.value.trim(); if (!text) return;
+      const btn = $("#csend", pg); if (btn.disabled) return; btn.disabled = true;
       inp.value = "";
       try {
         const b = db.batch(), mr = chatRef(chatId).collection("messages").doc();
         b.set(mr, { from: S.user.uid, text: text.slice(0, 1000), at: FV.serverTimestamp() });
         b.update(chatRef(chatId), { lastMsg: text.slice(0, 200), updatedAt: FV.serverTimestamp() });
         await b.commit();
-      } catch (e) { toast(failMsg(e)); }
+      } catch (e) { toast(failMsg(e)); inp.value = text; } finally { btn.disabled = false; }
     };
     $("#csend", pg).onclick = send;
     $("#cmsg", pg).addEventListener("keydown", e => { if (e.key === "Enter") send(); });
@@ -1699,9 +1693,12 @@
       m.innerHTML = header(t("tabChat"), "", topRight()) + (list.length ? list.map(c => {
         const other = c.participants.find(u => u !== S.user.uid);
         const otherName = (c.names && c.names[other]) || (other === c.ownerUid ? c.ownerName : t("you"));
-        return `<div class="lrow" data-chat="${esc(c.id)}">${iconHtml({ name: c.appName, pkg: c.appId }, "s")}<div class="g"><div class="nm ell">${esc(c.appName)}<small>${esc(otherName)}</small></div><div class="mt"><span class="ell">${esc(c.lastMsg || t("chatEmpty"))}</span></div></div><span class="go">💬</span></div>`;
+        return `<div class="lrow" data-chat="${esc(c.id)}">${iconHtml({ name: c.appName, pkg: c.appId }, "s")}<div class="g"><div class="nm ell">${esc(otherName)}<small>${esc(c.appName)}</small></div><div class="mt"><span class="ell">${esc(c.lastMsg || t("chatEmpty"))}</span></div></div><span class="go">💬</span></div>`;
       }).join("") : `<div class="empty"><div class="big">💬</div><p>${esc(t("noChats"))}</p></div>`);
-      $$("[data-chat]", m).forEach(el => el.onclick = () => { const c = list.find(x => x.id === el.dataset.chat); if (c) openChatPage(c.id, { id: c.appId, name: c.appName, ownerUid: c.ownerUid, ownerName: c.ownerName }); });
+      $$("[data-chat]", m).forEach(el => el.onclick = () => { const c = list.find(x => x.id === el.dataset.chat); if (!c) return;
+        const other = c.participants.find(u => u !== S.user.uid);
+        const otherName = (c.names && c.names[other]) || (other === c.ownerUid ? c.ownerName : t("you"));
+        openChatPage(c.id, { id: c.appId, name: c.appName, ownerUid: c.ownerUid, ownerName: c.ownerName }, otherName); });
       refreshDot();
     } catch (e) { console.error(e); return failBox(m, () => renderChat(m)); }
   }
